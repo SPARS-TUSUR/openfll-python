@@ -1,9 +1,9 @@
-site_name: OpenFLL
-site_description: Open Fuzzy Logic Library — Python API
+site_name: openfll-python
+site_description: Python биндинги для OpenFLL — Sugeno fuzzy logic
 site_url: https://spars-tusur.github.io/openfll-python/
 repo_url: https://github.com/SPARS-TUSUR/openfll-python
 repo_name: SPARS-TUSUR/openfll-python
-edit_uri: ""
+edit_uri: "edit/main/docs/"
 
 theme:
   name: material
@@ -41,7 +41,7 @@ plugins:
       default_handler: python
       handlers:
         python:
-          paths: [docs/../src]
+          paths: [src]
           options:
             docstring_style: google
             show_source: false

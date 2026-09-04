@@ -1,12 +1,13 @@
 # `SugenoEngine`
 
-Полное описание генерируется из `src/PyFLL/PyFLL.pyi`. Чтобы обновить —
-правьте только docstring'и в `.pyi` (или `R"doc()"` в `PyFLL.cpp`), затем
-пересоберите документацию (`mkdocs build`).
+Полное описание генерируется из `src/openfll/__init__.py` (стаб для griffe)
+и `src/openfll/__init__.pyi` (type hints для IDE). Чтобы обновить —
+правьте только docstring'и в стабе, затем пересоберите документацию
+(`mkdocs build --strict`).
 
 ## Класс
 
-::: PyFLL.SugenoEngine
+::: openfll.SugenoEngine
     options:
       members:
         - __init__
