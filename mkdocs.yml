@@ -1,0 +1,89 @@
+site_name: openfll-python
+site_description: Python биндинги для OpenFLL — Sugeno fuzzy logic
+site_url: https://spars-tusur.github.io/openfll-python/
+repo_url: https://github.com/SPARS-TUSUR/openfll-python
+repo_name: SPARS-TUSUR/openfll-python
+edit_uri: "edit/main/docs/"
+
+theme:
+  name: material
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - toc.follow
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+  icon:
+    repo: fontawesome/brands/github
+
+plugins:
+  - search
+  - mkdocstrings:
+      default_handler: python
+      handlers:
+        python:
+          paths: [src]
+          options:
+            docstring_style: google
+            show_source: false
+            members_order: source
+            show_symbol_type_heading: true
+            show_symbol_type_toc: true
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - toc:
+      permalink: true
+      toc_depth: 3
+
+nav:
+  - Главная: index.md
+  - Туториалы:
+    - tutorials/index.md
+    - Первый движок: tutorials/01-first-engine.md
+    - Управление компрессором: tutorials/02-fuzzy-arithmetic.md
+    - (Mamdani — будущее): tutorials/03-mamdani.md
+  - API:
+    - api/index.md
+    - SugenoEngine: api/sugeno-engine.md
+  - Архитектура:
+    - architecture/index.md
+    - Linear Facade: architecture/linear-facade.md
+    - Python API план: architecture/python-api-plan.md
+    - Отчёты по фазам: architecture/phase-reports.md
+  - Сборка: build.md
+  - Contributing: contributing.md
+
+# Не включено в навигацию:
+# - requirements.docx (наш внутренний документ с обсуждением, не для публикации)
