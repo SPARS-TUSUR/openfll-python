@@ -34,6 +34,7 @@ jobs:
       - name: Install tools
         run: |
           pip install --quiet mkdocs mkdocs-material "mkdocstrings[python]"
+          pip install --no-deps -e . || true
 
       - name: Build docs
         run: mkdocs build --strict
