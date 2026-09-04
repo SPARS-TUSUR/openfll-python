@@ -1,0 +1,68 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "openfll"
+version = "0.1.0"
+description = "Python bindings for OpenFLL fuzzy logic library"
+readme = "README.md"
+license = { text = "MIT" }
+authors = [
+    { name = "SPARS-TUSUR", email = "support@example.com" },
+]
+requires-python = ">=3.10"
+keywords = ["fuzzy-logic", "sugeno", "openfll", "bindings"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: Microsoft :: Windows",
+    "Programming Language :: C++",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Scientific/Engineering",
+]
+
+[project.urls]
+"Source (private)" = "https://github.com/SPARS-TUSUR/fuzzy-logic-library"
+Documentation = "https://spars-tusur.github.io/openfll-python/"
+Issues = "https://github.com/SPARS-TUSUR/openfll-python/issues"
+
+# ============================================================================
+# setuptools — какие файлы включать в wheel
+# ============================================================================
+[tool.setuptools]
+platforms = ["win_amd64"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["openfll*"]
+
+[tool.setuptools.package-data]
+"openfll" = [
+    "*.pyd",     # скомпилированное расширение (cp310, cp314)
+    "*.so",      # на случай Linux
+    "*.dll",     # MinGW runtime (libstdc++-6.dll и т.д.)
+    "*.pyi",     # type stubs для IDE
+]
+
+# ============================================================================
+# cibuildwheel — сборка wheels для разных Python
+# ============================================================================
+[tool.cibuildwheel]
+# Собирать для Windows, на каждый push
+build = "cp310-* cp314-*"
+skip = "*-musllinux_* *-manylinux_i686 pp*"
+build-frontend = { name = "build", args = ["--wheel"] }
+
+# C++ часть собирается отдельным job-ом (см. .github/workflows/wheel.yml),
+# а .pyd копируется в src/openfll/ перед запуском cibuildwheel.
+# Test the wheels by importing openfll and running a smoke test.
+test-requires = ["pytest"]
+test-command = "pytest {project}/tests -v"
+
+[tool.cibuildwheel.overrides]
+# Для каждой версии Python — отдельная сборка с правильным EXT_SUFFIX.
+"cp310-*" = { environment = { OPENFLL_PYTHON = "3.10" } }
+"cp314-*" = { environment = { OPENFLL_PYTHON = "3.14" } }

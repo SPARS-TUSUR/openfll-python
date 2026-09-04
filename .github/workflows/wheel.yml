@@ -1,0 +1,118 @@
+name: Build wheels
+
+# Сборка wheels для разных Python версий через cibuildwheel.
+# Триггеры:
+#   - workflow_dispatch: ручной запуск (выбор Python версии)
+#   - push в main: после тега — для GitHub Release
+#   - release: опубликованный GitHub Release — собрать и прикрепить wheels
+
+on:
+  workflow_dispatch:
+    inputs:
+      python:
+        description: "Python version (3.10 или 3.14)"
+        required: true
+        type: choice
+        default: "3.10"
+        options:
+          - "3.10"
+          - "3.14"
+  push:
+    tags:
+      - "v*"
+  release:
+    types: [published]
+
+jobs:
+  build_wheels:
+    name: Build on Python ${{ matrix.python }}
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.10", "3.14"]
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            git
+            base-devel
+            mingw-w64-x86_64-toolchain
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-ninja
+            mingw-w64-x86_64-python
+            mingw-w64-x86_64-pybind11
+            mingw-w64-x86_64-ccache
+
+      - name: Setup MinGW Python ${{ matrix.python }}
+        # MSYS2 по умолчанию ставит 3.14; используем symlink для 3.10.
+        shell: bash
+        run: |
+          PYTHON_VER=${{ matrix.python }}
+          if [ "$PYTHON_VER" = "3.10" ]; then
+              # Скачиваем Python 3.10 MinGW (python-build-standalone) для совместимости.
+              curl -L -o /tmp/python.tar.zst \
+                https://github.com/indygreg/python-build-standalone/releases/download/20240909/cpython-3.10.15+20240909-x86_64-pc-windows-gnu-shared-install_only.tar.gz
+              mkdir -p /mingw64/opt/python310
+              tar -xzf /tmp/python.tar.zst -C /mingw64/opt/python310 --strip-components=1
+              echo "PYTHON310_PATH=/mingw64/opt/python310/bin/python.exe" >> $GITHUB_ENV
+          else
+              echo "PYTHON310_PATH=/mingw64/bin/python3.14.exe" >> $GITHUB_ENV
+          fi
+
+      - name: Build C++ extension
+        shell: bash
+        run: |
+          set -e
+          PYTHON_EXE=${{ matrix.python == '3.10' && env.PYTHON310_PATH || env.PYTHON310_PATH }}
+          echo "Using Python: $PYTHON_EXE"
+          cmake -S . -B build_release -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER=gcc \
+            -DCMAKE_CXX_COMPILER=g++ \
+            -DPython3_EXECUTABLE="$PYTHON_EXE"
+          cmake --build build_release -j 4 --target PyFLL
+          # Проверяем, что .pyd создан
+          ls -la build_release/src/PyFLL/*.pyd
+
+      - name: Copy .pyd into package
+        shell: bash
+        run: |
+          PYD=$(ls build_release/src/PyFLL/*.pyd)
+          cp "$PYD" "src/openfll/$(basename $PYD | sed 's/^PyFLL/openfll/')"
+          # Копируем MinGW runtime DLL
+          cp /mingw64/bin/libstdc++-6.dll      src/openfll/
+          cp /mingw64/bin/libgcc_s_seh-1.dll    src/openfll/
+          cp /mingw64/bin/libwinpthread-1.dll  src/openfll/
+          ls -la src/openfll/
+
+      - name: Build wheel with cibuildwheel
+        shell: bash
+        run: |
+          pip install cibuildwheel
+          PYTHON_EXE=${{ matrix.python == '3.10' && env.PYTHON310_PATH || env.PYTHON310_PATH }}
+          # Собираем только для нужной версии через override.
+          cibuildwheel --output-dir wheelhouse/ \
+            --build "cp${{ matrix.python == '3.10' && '310' || '314' }}-*" \
+            --skip "*-musllinux_* *-manylinux_i686 pp*" \
+            -e "OPENFLL_PYTHON=${{ matrix.python }}" \
+            .
+
+      - name: Upload wheels as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-py${{ matrix.python }}
+          path: wheelhouse/*.whl
+
+      - name: Attach to GitHub Release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: wheelhouse/*.whl
