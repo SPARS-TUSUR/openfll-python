@@ -1,8 +1,15 @@
 """openfll — Python биндинги для OpenFLL Linear Facade.
 
-Этот модуль загружает .pyd-расширение и подменяет стаб реальным классом.
+Этот модуль загружает .pyd-расширение (openfll._core) и подменяет стаб
+SugenoEngine реальным классом через стандартный `from ._core import`.
 На уровне статического анализа (griffe/mkdocstrings/mypy) SugenoEngine
 определён здесь с type hints; в runtime он заменяется на настоящий.
+
+Архитектура "package + _core submodule" — стандартный паттерн (NumPy,
+OpenCV, torch). Имя extension = "_core" нужно, чтобы избежать коллизии
+имени модуля (openfll) с именем пакета (openfll): при совпадении в
+PEP 489 multi-phase init Python 3.14 падает с Access Violation в
+_PyImport_LoadDynamicModuleWithSpec.
 """
 from __future__ import annotations
 
@@ -79,53 +86,13 @@ class SugenoEngine:
 
 
 # ============================================================================
-# Runtime: загрузить .pyd и подменить стаб реальным классом
+# Runtime: загрузка из _core.pyd через стандартный import.
 # ============================================================================
-def _load_native() -> None:
-    """Найти .pyd в директории пакета и загрузить через ctypes.
-
-    Wheel содержит:
-      openfll.cp314-...pyd          (для Python 3.14, MinGW)
-
-    Почему ctypes, а не importlib:
-      pybind11 экспортирует функцию PyInit_openfll (по имени модуля из
-      PYBIND11_MODULE(openfll, m)). Через importlib.util.module_from_spec
-      с name="openfll" нельзя — этот модуль уже зарегистрирован в
-      sys.modules как сам пакет (этот __init__.py). Через ctypes+PyCapsule
-      мы загружаем .pyd, вызываем PyInit_openfll напрямую, получаем
-      Module-объект и копируем атрибуты в globals().
-    """
-    here = os.path.dirname(os.path.abspath(__file__))
-    import glob
-    candidates = sorted(glob.glob(os.path.join(here, "openfll.cp*.pyd")))
-    candidates += [os.path.join(here, "openfll.pyd")]  # fallback для разработки
-    for pyd_path in candidates:
-        if os.path.isfile(pyd_path):
-            # MinGW: добавляем каталог .pyd в DLL search path (для libpython и т.д.).
-            if hasattr(os, "add_dll_directory"):
-                os.add_dll_directory(here)
-            # pybind11 экспортирует PyInit_<name>, где <name> — аргумент
-            # PYBIND11_MODULE(name, m). Пробуем несколько вариантов имён.
-            import importlib.machinery
-            import importlib.util
-            for mod_name_try in ("openfll", "PyFLL"):
-                loader = importlib.machinery.ExtensionFileLoader(
-                    "_openfll_runtime", pyd_path)
-                spec = importlib.machinery.ModuleSpec(
-                    "_openfll_runtime", loader, origin=pyd_path)
-                spec.name = mod_name_try
-                try:
-                    native = importlib.util.module_from_spec(spec)
-                    sys.modules["_openfll_runtime"] = native
-                    loader.exec_module(native)
-                    globals()["SugenoEngine"] = native.SugenoEngine
-                    return
-                except ImportError:
-                    continue
-            continue
-    # .pyd не найден — оставляем стаб; инстанцирование упадёт с понятной ошибкой.
-    # Эта ситуация нормальна только в исходниках без wheel (например, в mkdocs build).
+try:
+    from ._core import SugenoEngine as _RealSugenoEngine
+    SugenoEngine = _RealSugenoEngine
+    del _RealSugenoEngine
+except ImportError:
+    # _core.pyd не найден (например, при mkdocs build без wheel). Стаб
+    # остаётся; инстанцирование SugenoEngine() упадёт с понятной ошибкой.
     pass
-
-
-_load_native()
