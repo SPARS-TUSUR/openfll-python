@@ -1,100 +1,75 @@
 # Contributing
 
-Как добавить новую фичу в OpenFLL (MF, t/s-норму, метод SugenoEngine, и т.д.).
+`openfll-python` — это тонкий Python-биндинг над [OpenFLL C++ библиотекой](https://github.com/SPARS-TUSUR/fuzzy-logic-library).
+Большинство фич (новые MF, t/s-нормы, методы движка) добавляются **в C++-репо**, а в этот пакет они попадают
+через пересборку `.pyd` и релиз новой версии wheel.
 
-## Добавить новую функцию принадлежности
+Здесь — только то, что можно контрибьютить в сам `openfll-python`.
 
-1. **Реализуйте класс MF** в `src/OpenFLL/membership_functions/<name>.{h,cpp}`,
-   наследуя от `Abstract::IMembershipFunction`. Должен быть метод `find_belonging(double) → double`.
+## Сообщить о баге
 
-2. **Добавьте в реестр** `src/OpenFLL/linear/mf_factory.cpp`:
-   ```cpp
-   if (type_lc == "my_mf") {
-       expect_params(params, N, type);
-       return std::make_shared<OFLL::MembershipFunc::MyMF>(...);
-   }
-   ```
+Создайте [Issue](https://github.com/SPARS-TUSUR/openfll-python/issues) с:
 
-3. **Добавьте type literal** в `src/PyFLL/PyFLL.pyi`:
-   ```python
-   MfType = Literal["constant", "triangular", "trapezoidal", "gaussian", "polynomial", "my_mf"]
-   ```
+- Версия Python (`python --version`) и платформа (Win/Mac/Linux, `win_amd64` / `manylinux_*`).
+- Команда для воспроизведения: `engine.add_rule(...)`, `engine.calculate()` и т.д.
+- Полный traceback.
+- Минимальный пример (5–15 строк).
 
-4. **Тесты** в `tests/OpenFLL/linear/mf_factory_test.cpp`:
-   ```cpp
-   TEST(MfFactoryTest, MyMfRoundtrip) {
-       auto mf = make_membership_function("my_mf", {1.0, 2.0});
-       EXPECT_NEAR(mf->find_belonging(0.5), ..., 1e-9);
-       EXPECT_THROW(make_membership_function("my_mf", {}), std::invalid_argument);
-   }
-   ```
+Если проблема — в самой fuzzy-логике (неправильный результат `calculate()`), это баг **C++ ядра** →
+[SPARS-TUSUR/fuzzy-logic-library/issues](https://github.com/SPARS-TUSUR/fuzzy-logic-library/issues).
 
-5. **CI**: запустите `cmake --build build --target unit_tests`,
-   `tests/python/test_stub_types_good.py` (mypy) — должны пройти.
+## Запустить тесты локально
 
-## Добавить новую t/s-норму
+```bash
+pip install openfll                # для smoke-теста API
+python -c "import openfll; e = openfll.SugenoEngine(); e.build()"  # проверка загрузки
 
-1. **Реализуйте структуру** в `src/OpenFLL/rules/core/operators/{t,s}_norm/<name>.h`:
-   ```cpp
-   namespace OFLL::Rules::Core::Operators::TN {
-       struct MyNorm {
-           double constexpr operator()(const double a, const double b) const {
-               return /* ... */;
-           }
-       };
-   }
-   ```
+# Для разработки самого пакета (после git clone):
+pip install -e .[dev]              # редактируемая установка
+pytest tests/                      # если есть pytest-тесты
+```
 
-2. **Добавьте в NormId** `src/OpenFLL/linear/norm_registry.h`:
-   ```cpp
-   enum class NormId {
-       Min, ProdAnd, ..., MyNorm,
-       Max, ..., MySNorm,
-   };
-   ```
-   И в `parse_norm_name` и `norm_id_to_name` — case для новой нормы.
+Wheel под `cp314-cp314-win_amd64` и `cp314-cp314-mingw_x86_64_msvcrt_gnu` собирается
+через `cibuildwheel` в GitHub Actions — см. `.github/workflows/wheel.yml`.
+Локальная сборка требует MSVC 2022 (Windows) или GCC 14+ (Linux).
 
-3. **Tag dispatch** в `src/OpenFLL/linear/sugeno_engine.cpp` — switch по `NormId`:
-   ```cpp
-   case NormId::MyNorm: rb.t_norm<TN::MyNorm>(v).is(m); break;
-   ```
+## Поправить документацию
 
-4. **Type stub** в `src/PyFLL/PyFLL.pyi`:
-   ```python
-   TNorms = Literal["min", ..., "my_norm"]
-   ```
+Документация — `mkdocs Material`, исходники в `docs/`. Лёгкие правки:
 
-5. **Тесты** в `tests/OpenFLL/linear/rule_parser_test.cpp` и `sugeno_engine_test.cpp`.
+1. Fork → edit `.md` файл → PR в `main`.
+2. Локальная проверка: `pip install mkdocs-material mkdocstrings[python]`
+   `mkdocs build --strict` — должен пройти без warnings.
+3. Туториалы (`docs/tutorials/`) и API reference (`docs/api/`) — самое то для первого PR.
 
-## Добавить новый метод SugenoEngine
+## Добавить пример / tutorial
 
-1. **Объявите в `src/OpenFLL/linear/sugeno_engine.h`** (public-секция).
-2. **Реализуйте в `src/OpenFLL/linear/sugeno_engine.cpp`**.
-3. **Зарегистрируйте в `src/PyFLL/PyFLL.cpp`** через `.def(...)` с docstring.
-4. **Добавьте в `src/PyFLL/PyFLL.pyi`** (public-метод) с docstring.
-5. **Тесты** в `tests/OpenFLL/linear/sugeno_engine_test.cpp`.
-6. **Документация**: если метод публичный — добавьте секцию в `docs/api/sugeno-engine.md`
-   (через `:::` директиву с новым методом в `members`).
-
-## Процесс code review
-
-1. Убедитесь, что:
-   - C++ тесты зелёные: `cmake --build build --target unit_tests && build/tests/unit_tests.exe`
-   - Python тесты зелёные: `python tests/python/test_sugeno_smoke.py`
-   - mypy strict: `mypy --config-file tests/python/mypy.ini tests/python/test_stub_types_good.py`
-   - Parity сохранён: `python tests/python/compressor_parity.py` (max diff < 1e-9)
-2. Обновите `docs/architecture/phase-reports.md` если это меняет публичный API.
-3. Если меняли `R"doc()"` в C++ — регенерируйте `PyFLL.pyi` (см. [API Reference](api/index.md)).
+Положите standalone `.py` скрипт в `examples/` (если появится) или новый `.md`
+в `docs/tutorials/`. Без C++ — только Python + `openfll`.
 
 ## Стиль кода
 
-- **C++**: Google C++ Style Guide, где возможно. Namespace-ы `OFLL::*`. `using` — минимально.
-- **Python**: PEP 8, type hints обязательны для публичного API. Docstring'и — Google style.
-- **Commits**: осмысленные сообщения. Один PR — одна фича.
-- **Документация**: каждое изменение публичного API → обновить `.pyi` **в том же коммите**.
+- **Python**: PEP 8, type hints обязательны для публичного API.
+- **Docstring'и**: Google style (используется `mkdocstrings`).
+- **Commits**: один PR — одна фича. Сообщения — на русском или английском,
+  с префиксом области: `docs:`, `pyi:`, `ci:`, `tests:`.
+- **Тесты**: добавляйте в `tests/python/` рядом с уже существующими
+  (smoke / parity / stub-types).
+
+## Что НЕ править в этом репо
+
+| Хочется изменить | Где на самом деле |
+|------------------|-------------------|
+| Алгоритм Sugeno / Mamdani | [fuzzy-logic-library/src/OpenFLL](https://github.com/SPARS-TUSUR/fuzzy-logic-library/tree/main/src/OpenFLL) |
+| Добавить новую MF | [fuzzy-logic-library + mf_factory.cpp](https://github.com/SPARS-TUSUR/fuzzy-logic-library) |
+| pybind11 биндинги (`.def(...)`) | [fuzzy-logic-library/src/PyFLL](https://github.com/SPARS-TUSUR/fuzzy-logic-library/tree/main/src/PyFLL) |
+| C++-сборка (CMake) | там же |
+
+После принятия C++-фичи в upstream — открывайте issue здесь
+с тегом `rebuild-needed`, новая wheel-версия соберётся автоматически.
 
 ## Контакты
 
-- GitHub: [SPARS-TUSUR/fuzzy-logic-library](https://github.com/SPARS-TUSUR/fuzzy-logic-library)
-- Issues: создавайте в GitHub
-- Документация: [spars-tusur.github.io/fuzzy-logic-library](https://spars-tusur.github.io/fuzzy-logic-library/)
+- GitHub: [SPARS-TUSUR/openfll-python](https://github.com/SPARS-TUSUR/openfll-python)
+- C++ ядро: [SPARS-TUSUR/fuzzy-logic-library](https://github.com/SPARS-TUSUR/fuzzy-logic-library)
+- Документация: [spars-tusur.github.io/openfll-python](https://spars-tusur.github.io/openfll-python/)
