@@ -42,3 +42,8 @@ Thumbs.db
 .pytest_cache/
 .coverage
 htmlcov/
+
+# C++ extension binaries and MinGW runtime (built by CI)
+*.dll
+*.pyd
+*.so

@@ -1,16 +1,21 @@
 """openfll — Python биндинги для OpenFLL Linear Facade.
 
-Этот модуль загружает .pyd-расширение и подменяет стаб реальным классом.
+Этот модуль загружает .pyd-расширение (openfll._core) и подменяет стаб
+SugenoEngine реальным классом через стандартный `from ._core import`.
 На уровне статического анализа (griffe/mkdocstrings/mypy) SugenoEngine
 определён здесь с type hints; в runtime он заменяется на настоящий.
+
+Архитектура "package + _core submodule" — стандартный паттерн (NumPy,
+OpenCV, torch). Имя extension = "_core" нужно, чтобы избежать коллизии
+имени модуля (openfll) с именем пакета (openfll): при совпадении в
+PEP 489 multi-phase init Python 3.14 падает с Access Violation в
+_PyImport_LoadDynamicModuleWithSpec.
 """
 from __future__ import annotations
 
-import importlib.machinery
-import importlib.util
 import os
 import sys
-from typing import List, Literal, Tuple, Union
+from typing import List, Literal, Optional, Tuple, Union
 
 __all__ = ["SugenoEngine", "MfType", "TNorms", "SNorms"]
 
@@ -35,19 +40,15 @@ SNorms = Literal[
 class SugenoEngine:
     """Linear facade for Sugeno fuzzy logic model.
 
-    Build a model by:
-      1. Registering input/output variables (add_input_var / add_output_var).
-      2. Adding membership functions to those variables
-         (add_membership_func: name + type + parameter list).
-      3. Adding rules as plain strings
-         (add_rule: 'IF x1 IS "low" AND x2 IS "high" THEN y IS "fast"').
-      4. Calling build() to compile the model.
-      5. Setting input values (set_input), running calculate(), and
-         reading outputs (get_output).
-
-    Rules support explicit norms:
-      IF x1 IS "low" AND[prod_and] x2 IS "high" OR[algebraic_sum] x3 IS "slow"
-      THEN y IS "open"
+    Two forms of rules are supported:
+      - Textual: add_rule('IF x1 IS "low" AND x2 IS "high" THEN y IS "open"')
+        Supports AND/OR with optional [norm_name] for explicit t/s-norms.
+      - Structural (tuple): add_rule(
+            antecedent=[("x1", "low"), ("x2", "high")],
+            consequent=[("y", "open")],
+            t_norm="prod_and",
+        )
+        Preferred for programmatic rule generation; AND-only.
 
     See docs at https://spars-tusur.github.io/openfll-python/
     """
@@ -68,6 +69,13 @@ class SugenoEngine:
     ) -> None: ...
 
     def add_rule(self, rule: str) -> None: ...
+    def add_rule(
+        self,
+        antecedent: List[Tuple[str, str]],
+        consequent: List[Tuple[str, str]],
+        t_norm: Union[TNorms, str, None] = None,
+        s_norm: Union[SNorms, str, None] = None,
+    ) -> None: ...
     def set_default_t_norm(self, name: TNorms) -> None: ...
     def set_default_s_norm(self, name: SNorms) -> None: ...
     def build(self) -> None: ...
@@ -78,36 +86,13 @@ class SugenoEngine:
 
 
 # ============================================================================
-# Runtime: загрузить .pyd и подменить стаб реальным классом
+# Runtime: загрузка из _core.pyd через стандартный import.
 # ============================================================================
-def _load_native() -> None:
-    """Найти .pyd в директории пакета и загрузить через importlib.
-
-    Wheel содержит:
-      openfll.cp310-win_amd64.pyd    (для Python 3.10)
-      openfll.cp314-...pyd          (для Python 3.14)
-    """
-    here = os.path.dirname(os.path.abspath(__file__))
-    # cp310
-    candidates = [
-        "openfll.cp310-win_amd64.pyd",
-        "openfll.cp314-win_amd64.pyd",
-        "openfll.cp314-mingw_x86_64_msvcrt_gnu.pyd",
-        "openfll.pyd",  # fallback для разработки
-    ]
-    for name in candidates:
-        pyd_path = os.path.join(here, name)
-        if os.path.isfile(pyd_path):
-            loader = importlib.machinery.ExtensionFileLoader("openfll._native", pyd_path)
-            spec = importlib.machinery.ModuleSpec("openfll._native", loader, origin=pyd_path)
-            native = importlib.util.module_from_spec(spec)
-            sys.modules["openfll._native"] = native
-            loader.exec_module(native)
-            globals()["SugenoEngine"] = native.SugenoEngine
-            return
-    # .pyd не найден — оставляем стаб; инстанцирование упадёт с понятной ошибкой.
-    # Эта ситуация нормальна только в исходниках без wheel (например, в mkdocs build).
+try:
+    from ._core import SugenoEngine as _RealSugenoEngine
+    SugenoEngine = _RealSugenoEngine
+    del _RealSugenoEngine
+except ImportError:
+    # _core.pyd не найден (например, при mkdocs build без wheel). Стаб
+    # остаётся; инстанцирование SugenoEngine() упадёт с понятной ошибкой.
     pass
-
-
-_load_native()

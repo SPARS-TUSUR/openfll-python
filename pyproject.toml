@@ -11,7 +11,7 @@ license = { text = "MIT" }
 authors = [
     { name = "SPARS-TUSUR", email = "support@example.com" },
 ]
-requires-python = ">=3.10"
+requires-python = ">=3.14"
 keywords = ["fuzzy-logic", "sugeno", "openfll", "bindings"]
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -19,7 +19,6 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Operating System :: Microsoft :: Windows",
     "Programming Language :: C++",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.14",
     "Topic :: Scientific/Engineering",
 ]
@@ -41,7 +40,7 @@ include = ["openfll*"]
 
 [tool.setuptools.package-data]
 "openfll" = [
-    "*.pyd",     # скомпилированное расширение (cp310, cp314)
+    "*.pyd",     # скомпилированное расширение (cp314)
     "*.so",      # на случай Linux
     "*.dll",     # MinGW runtime (libstdc++-6.dll и т.д.)
     "*.pyi",     # type stubs для IDE
@@ -51,8 +50,8 @@ include = ["openfll*"]
 # cibuildwheel — сборка wheels для разных Python
 # ============================================================================
 [tool.cibuildwheel]
-# Собирать для Windows, на каждый push
-build = "cp310-* cp314-*"
+# Собирать для Windows, только cp314 (MinGW-Python 3.14).
+build = "cp314-*"
 skip = "*-musllinux_* *-manylinux_i686 pp*"
 build-frontend = { name = "build", args = ["--wheel"] }
 
@@ -63,6 +62,4 @@ test-requires = ["pytest"]
 test-command = "pytest {project}/tests -v"
 
 [tool.cibuildwheel.overrides]
-# Для каждой версии Python — отдельная сборка с правильным EXT_SUFFIX.
-"cp310-*" = { environment = { OPENFLL_PYTHON = "3.10" } }
 "cp314-*" = { environment = { OPENFLL_PYTHON = "3.14" } }

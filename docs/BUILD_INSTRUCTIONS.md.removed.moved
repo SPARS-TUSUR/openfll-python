@@ -1,0 +1,372 @@
+# OpenFLL — инструкция по сборке и использованию Python-обёртки
+
+**Дата:** 2026-09-02
+**Стек:** MinGW g++ 15.2 (ucrt64) + CMake 4.0.2 + Python 3.10 (cp310) + pybind11 3.0.2
+**Платформа:** Windows 10/11, 64-бит
+
+Этот документ — пошаговая инструкция для разработчика, который
+садится за новую машину и хочет собрать OpenFLL + Python-обёртку.
+На другой машине уже собирали — там были другие пути (mingw64, MSYS2-Python).
+Здесь описано, как сделать это в **этой** конфигурации.
+
+---
+
+## 1. Что есть в проекте
+
+```
+src/
+├── OpenFLL/         ядро C++ (статическая библиотека libOpenFLL.a)
+│   ├── linear/      Linear Facade (SugenoEngine) — то, что биндим в Python
+│   ├── models/      Mamdani, Sugeno
+│   ├── rules/       rules_builder + compound antecedent
+│   ├── membership_functions/
+│   └── ...
+├── PyFLL/           Python-биндинги (pybind11 → PyFLL.cp310-win_amd64.pyd)
+│   ├── PyFLL.cpp
+│   ├── PyFLL.pyi    type stubs (копируется в build/ при сборке)
+│   └── CMakeLists.txt
+├── launch.cpp       демо-лаунчер
+examples/
+└── compressor_run.cpp  Sugeno-контроллер компрессора
+tests/
+├── OpenFLL/         gtest-тесты ядра и linear-фасада (89 тестов)
+└── python/          parity-тесты C++ ↔ Python (6 тестов)
+vendor/
+└── pybind11/        submodule с pybind11
+```
+
+**Результат сборки:**
+
+| Файл | Что это | Размер (≈) |
+|---|---|---|
+| `build/OpenFLL_launcher.exe` | демо-приложение (Sugeno) | 290 KB |
+| `build/compressor_run.exe` | контроллер компрессора | 320 KB |
+| `build/tests/unit_tests.exe` | gtest-раннер | 2.3 MB |
+| `build/src/OpenFLL/libOpenFLL.a` | статическая библиотека ядра | 30 MB |
+| `build/src/PyFLL/PyFLL.cp310-win_amd64.pyd` | **Python-модуль** | 305 KB |
+| `build/src/PyFLL/PyFLL.pyi` | type stubs для IDE | 8 KB |
+
+> **Важно:** `PyFLL.cp310-win_amd64.pyd` — это **Python extension module**,
+> который на Windows технически является `.dll`. Имя `cp310` означает
+> сборку под **Python 3.10 ABI**. Если на машине стоит только Python 3.14,
+> нужно пересобрать с `-DPython_EXECUTABLE=...python314.exe`, тогда
+> получится `cp314-win_amd64.pyd`.
+
+---
+
+## 2. Окружение: что должно быть на машине
+
+| Компонент | Версия | Где | Проверка |
+|---|---|---|---|
+| g++ (ucrt64) | 15.2.0 | `C:\msys64\ucrt64\bin\g++.exe` | `g++ --version` |
+| CMake | 4.0.2 | `C:\CMake\bin\cmake.exe` | `cmake --version` |
+| Python | 3.10.10 | `C:\Python\Python310_64\python.exe` | `python --version` |
+| pybind11 | 3.0.2 (submodule) | `D:\repos\FLL\vendor\pybind11\` | папка + `include/pybind11/pybind11.h` |
+| gdb | для отладки | `C:\msys64\ucrt64\bin\gdb.exe` | (необязательно) |
+| Ninja/Make | для сборки | `C:\msys64\ucrt64\bin\mingw32-make.exe` | идёт с MSYS2 |
+
+### Расширения VS Code (рекомендуется)
+- **C/C++** (ms-vscode.cpptools) — IntelliSense
+- **CMake Tools** (ms-vscode.cmake-tools) — кнопки Configure/Build/Run в статус-баре
+- **Python** (ms-python.python) — подсказки по PyFLL через .pyi
+
+---
+
+## 3. Подготовка: проверить, что всё есть
+
+```powershell
+# Из PowerShell:
+g++ --version                        # → g++.exe (Rev8, Built by MSYS2 project) 15.2.0
+cmake --version                      # → cmake version 4.0.2
+C:\Python\Python310_64\python.exe --version   # → Python 3.10.10
+```
+
+Если `g++` или `python` ругаются — добавь в `PATH`:
+- `C:\msys64\ucrt64\bin`
+- `C:\CMake\bin`
+- `C:\Python\Python310_64`
+
+Проверить submodule pybind11:
+```powershell
+Test-Path D:\repos\FLL\vendor\pybind11\include\pybind11\pybind11.h
+# Должно быть True.
+```
+Если `False`:
+```powershell
+cd D:\repos\FLL
+git submodule update --init --recursive
+```
+
+---
+
+## 4. Сборка через командную строку (5 минут)
+
+### Шаг 1. Конфигурация CMake
+
+```powershell
+cd D:\repos\FLL
+
+# Если раньше собирали с другими путями — очистить кэш
+Remove-Item -Recurse -Force build   # либо вручную удалить папку build/
+
+# Конфигурация
+cmake -S . -B build --fresh -G "MinGW Makefiles" `
+    -DCMAKE_CXX_COMPILER="C:/msys64/ucrt64/bin/g++.exe" `
+    -DCMAKE_C_COMPILER="C:/msys64/ucrt64/bin/gcc.exe" `
+    -DCMAKE_MAKE_PROGRAM="C:/msys64/ucrt64/bin/mingw32-make.exe" `
+    -DCMAKE_BUILD_TYPE=Release `
+    -DPython_EXECUTABLE="C:/Python/Python310_64/python.exe" `
+    -DPython_ROOT_DIR="C:/Python/Python310_64" `
+    -DPython3_EXECUTABLE="C:/Python/Python310_64/python.exe" `
+    -DPython3_ROOT_DIR="C:/Python/Python310_64" `
+    -DPYBIND11_FINDPYTHON="NEW"
+```
+
+**Ожидаемый вывод (финал):**
+```
+-- Found Python3: C:/Python/Python310_64/python.exe (found version "3.10.10")
+-- Build system: Windows
+-- Compiler: GNU
+-- Configuring done
+-- Generating done
+-- Build files have been written to: D:/repos/FLL/build
+```
+
+> **Зачем так много Python-переменных?** `pybind11` ищет Python **двумя** путями —
+> через `find_package(Python3 ...)` (modern) и `find_package(Python ...)` (legacy).
+> На этой машине без `Python_EXECUTABLE` он цепляет Python 3.14 из PATH,
+> хотя мы хотим 3.10. Четыре переменные (`Python3_*` + `Python_*`) гасят обе ветки.
+
+### Шаг 2. Сборка (5–10 минут с нуля, 30 секунд инкрементально)
+
+```powershell
+cmake --build build -j 4
+```
+
+**Ожидаемый финал:**
+```
+[100%] Built target unit_tests
+```
+
+> Первый раз будет долго — FetchContent скачает `googletest`, `reflectcpp`, `yas`,
+> скомпилирует 50+ cpp-файлов ядра OpenFLL. Последующие сборки — только
+> изменённые файлы.
+
+### Шаг 3. Проверка
+
+```powershell
+# C++ тесты
+D:\repos\FLL\build\tests\unit_tests.exe --gtest_brief=1
+# → "[ PASSED ] 89 tests."
+
+# Python тесты
+$env:Path = "C:\Python\Python310_64;C:\msys64\ucrt64\bin;$env:Path"
+$env:PYFLL_PATH = "D:\repos\FLL\build\src\PyFLL"
+cd D:\repos\FLL\tests\python
+C:\Python\Python310_64\python.exe test_sugeno_smoke.py
+# → "All Python smoke tests passed."
+```
+
+---
+
+## 5. Сборка через VS Code
+
+После того как `.vscode/settings.json`, `.vscode/tasks.json`,
+`.vscode/launch.json` настроены (уже в репозитории), есть три способа:
+
+### Способ A: CMake Tools (рекомендуется)
+1. Установить расширение **CMake Tools**.
+2. В статус-баре внизу выбрать:
+   - Kit: **GCC 15.2.0 (C:/msys64/ucrt64/bin/g++..exe)**
+   - Build variant: **Release**
+   - Target: **all**
+3. Кнопка **⚙ Configure** (или `Ctrl+Shift+P` → "CMake: Configure").
+4. Кнопка **🔨 Build** (или `F7`).
+5. Кнопка **▶ Run/Debug** для запуска целей (OpenFLL_launcher, unit_tests).
+
+### Способ B: Tasks (если не хочется ставить CMake Tools)
+`Ctrl+Shift+P` → "Tasks: Run Task" → выбрать:
+- **OpenFLL: configure (CMake, Release, Python 3.10)** — реконфигурация
+- **OpenFLL: build (all targets)** — основная сборка
+- **OpenFLL: build (incremental)** — быстрая дособорка
+- **OpenFLL: run C++ unit tests** — gtest
+- **OpenFLL: run Python smoke tests** — parity-тесты
+- **OpenFLL: launch OpenFLL_launcher.exe** — запуск демо
+
+Кнопка **Build** (`Ctrl+Shift+B`) — это `OpenFLL: build (all targets)`.
+
+### Способ C: Отладка
+`F5` или боковая панель "Run and Debug" → выбрать:
+- **(gdb) OpenFLL_launcher** — лаунчер с точками останова
+- **(gdb) unit_tests (gtest)** — gtest с пошаговой отладкой
+- **(gdb) compressor_run** — компрессор
+
+Точки останова в `.cpp`/`.h` работают как обычно.
+
+---
+
+## 6. Использование Python-обёртки
+
+### Импорт
+```python
+import PyFLL  # ищет PyFLL в sys.path
+```
+
+`PyFLL.cp310-win_amd64.pyd` лежит в `build/src/PyFLL/`. Чтобы
+Python нашёл его, **либо** запускай скрипт из этой папки:
+
+```powershell
+cd D:\repos\FLL\build\src\PyFLL
+C:\Python\Python310_64\python.exe my_script.py
+```
+
+**Либо** пропиши `PYTHONPATH`:
+```powershell
+$env:PYTHONPATH = "D:\repos\FLL\build\src\PyFLL"
+C:\Python\Python310_64\python.exe my_script.py
+```
+
+**Либо** положи `.pyd` рядом со скриптом.
+
+### Подсказки IDE (Pylance / mypy)
+Файл `PyFLL.pyi` лежит в `src/PyFLL/` и копируется в `build/src/PyFLL/`
+при каждой сборке. Чтобы Pylance видел типы в скрипте, добавь в
+настройки VS Code:
+```json
+"python.analysis.extraPaths": ["D:/repos/FLL/build/src/PyFLL"]
+```
+или в `pyrightconfig.json`:
+```json
+{ "extraPaths": ["D:/repos/FLL/build/src/PyFLL"] }
+```
+
+### Минимальный пример
+```python
+import PyFLL
+
+e = PyFLL.SugenoEngine()
+e.add_input_var('x1')
+e.add_input_var('x2')
+e.add_output_var('y')
+
+e.add_membership_func('x1', 'low',  'triangular', [-10.0, 0.0, 10.0])
+e.add_membership_func('x1', 'high', 'triangular', [0.0, 10.0, 20.0])
+e.add_membership_func('x2', 'low2', 'triangular', [-10.0, 0.0, 10.0])
+e.add_membership_func('x2', 'high2', 'triangular', [0.0, 10.0, 20.0])
+e.add_membership_func('y',  'off',  'constant', [0.0])
+e.add_membership_func('y',  'on',   'constant', [100.0])
+
+e.add_rule('IF x1 IS "low" AND x2 IS "low2" THEN y IS "off"')
+e.add_rule('IF x1 IS "high" OR x2 IS "high2" THEN y IS "on"')
+
+e.build()
+e.set_input('x1', 5.0)
+e.set_input('x2', 5.0)
+e.calculate()
+print('y =', e.get_output('y'))  # → 50.0
+```
+
+Полный API — в `src/PyFLL/PyFLL.pyi` (он лежит в репозитории и
+копируется в `build/src/PyFLL/PyFLL.pyi` при сборке).
+
+---
+
+## 7. Типичные проблемы
+
+### «DLL load failed while importing PyFLL»
+
+**Причина:** `PyFLL.cp310-win_amd64.pyd` собран в Debug, а запускается
+из release `python.exe`. Либо наоборот.
+
+**Решение:** собирать в Release:
+```powershell
+cmake -B build -DCMAKE_BUILD_TYPE=Release ...   # см. шаг 1
+cmake --build build -j 4
+```
+
+### «No module named 'PyFLL'»
+
+**Причина:** Python не нашёл `.pyd` в `sys.path`.
+
+**Решение:**
+- `cd build\src\PyFLL` и запустить оттуда
+- или `set PYTHONPATH=build\src\PyFLL`
+- или положить `.pyd` рядом со скриптом
+
+### «Module not found: libgcc_s_seh-1.dll» / «libstdc++-6.dll»
+
+**Причина:** MinGW runtime не в PATH.
+
+**Решение:** добавить в PATH:
+```
+C:\msys64\ucrt64\bin
+```
+Или положить три DLL рядом с `.pyd`:
+```
+libgcc_s_seh-1.dll
+libstdc++-6.dll
+libwinpthread-1.dll
+```
+
+### «Could NOT find Python3» при configure
+
+**Причина:** `pybind11` не нашёл Python или нашёл не тот.
+
+**Решение:** явно указать:
+```powershell
+-DPython_EXECUTABLE="C:/Python/Python310_64/python.exe" `
+-DPython_ROOT_DIR="C:/Python/Python310_64" `
+-DPython3_EXECUTABLE="C:/Python/Python310_64/python.exe" `
+-DPython3_ROOT_DIR="C:/Python/Python310_64"
+```
+
+### «.pyd называется cp314, а Python 3.10»
+
+**Причина:** pybind11 нашёл Python 3.14 в PATH раньше 3.10.
+
+**Решение:** то же, что выше — явно задать `Python_EXECUTABLE`
+**и** поставить `C:\Python\Python310_64` **первым** в PATH.
+
+### Компилятор не найден при сборке
+
+**Причина:** в `build/CMakeCache.txt` сохранён старый путь к g++.
+
+**Решение:**
+```powershell
+Remove-Item -Recurse -Force build
+cmake -S . -B build --fresh -G "MinGW Makefiles" -DCMAKE_CXX_COMPILER=... ...
+```
+
+### «undefined reference to ...reflectcpp...»
+
+**Причина:** не подтянулся submodule reflectcpp.
+
+**Решение:** проверить, что FetchContent отработал. Должна быть папка
+`build/_deps/reflectcpp-src/`.
+
+---
+
+## 8. Что НЕ нужно делать
+
+- ❌ **Не открывать проект как «Visual Studio solution»** — это CMake-проект,
+  а не `.sln`. Используй расширение CMake Tools.
+- ❌ **Не собирать Debug, если будешь запускать из release `python.exe`** —
+  будет «DLL load failed» из-за несовпадения ABI.
+- ❌ **Не класть Python 3.14 первым в PATH, если целишься в 3.10** —
+  pybind11 подхватит 3.14 и соберёт cp314.pyd, который твой 3.10
+  Python не загрузит.
+- ❌ **Не редактировать файлы в `build/`** — они перегенерируются.
+- ❌ **Не удалять `build/_deps/` руками** — это кэш FetchContent,
+  CMake сам решает, когда обновить.
+
+---
+
+## 9. Версии, на которых собиралось
+
+| Когда | Среда | Результат |
+|---|---|---|
+| ~ апрель 2026 | `D:\msys64\mingw64`, g++ 14.2, Python 3.14 (MSYS2) | первая сборка |
+| 2026-09-02 | `C:\msys64\ucrt64`, g++ 15.2, Python 3.10 (`C:\Python\Python310_64`) | 89/89 + 6/6 тестов ✅ |
+
+При переезде на новую машину — проверь, что пути из `CMakeCache.txt`
+совпадают с реальными. Если нет — `--fresh` + явные флаги.

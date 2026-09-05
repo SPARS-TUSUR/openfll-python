@@ -3,7 +3,7 @@
 Дублирует сигнатуры из R"doc()" в C++ binding. CI проверяет
 синхронность через scripts/gen_stubs.py.
 """
-from typing import List, Literal, Tuple, Union
+from typing import List, Literal, Optional, Tuple, Union
 
 # ============================================================================
 # Literal типы
@@ -60,6 +60,13 @@ class SugenoEngine:
         params: Union[List[float], Tuple[float, ...]],
     ) -> None: ...
     def add_rule(self, rule: str) -> None: ...
+    def add_rule(
+        self,
+        antecedent: List[Tuple[str, str]],
+        consequent: List[Tuple[str, str]],
+        t_norm: Union[TNorms, str, None] = None,
+        s_norm: Union[SNorms, str, None] = None,
+    ) -> None: ...
     def set_default_t_norm(self, name: TNorms) -> None: ...
     def set_default_s_norm(self, name: SNorms) -> None: ...
     def build(self) -> None: ...
