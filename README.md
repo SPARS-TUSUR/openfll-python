@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/assets/openfll-logo.png" alt="OpenFLL — Open Fuzzy Logic Library" width="320">
+</p>
+
 # openfll-python
 
 **Python биндинги для OpenFLL** (C++ библиотека нечёткой логики).
