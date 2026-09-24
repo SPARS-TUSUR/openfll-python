@@ -21,6 +21,7 @@ import openfll
 e = openfll.SugenoEngine()
 e.add_input_var("x1")
 e.add_input_var("x2")
+e.add_output_var("y")
 e.add_membership_func("x1", "low", "triangular", [-10, 0, 10])
 e.add_membership_func("x2", "high", "gaussian", [5, 2])
 e.add_membership_func("y", "lo", "constant", [10.0])
