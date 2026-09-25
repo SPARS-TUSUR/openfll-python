@@ -1,30 +1,59 @@
-"""openfll — Python биндинги для OpenFLL Linear Facade.
+"""Публичный Python API для OpenFLL.
 
-Этот модуль загружает .pyd-расширение (openfll._core) и подменяет стаб
-SugenoEngine реальным классом через стандартный `from ._core import`.
-На уровне статического анализа (griffe/mkdocstrings/mypy) SugenoEngine
-определён здесь с type hints; в runtime он заменяется на настоящий.
+`openfll` — это пакет, предназначенный для непосредственного использования. 
+Во время выполнения он делегирует задачи внутреннему пакету-бэкенду `PyFLL`, который содержит модуль расширения на машинном коде `PyFLL._core`.
 
-Архитектура "package + _core submodule" — стандартный паттерн (NumPy,
-OpenCV, torch). Имя extension = "_core" нужно, чтобы избежать коллизии
-имени модуля (openfll) с именем пакета (openfll): при совпадении в
-PEP 489 multi-phase init Python 3.14 падает с Access Violation в
-_PyImport_LoadDynamicModuleWithSpec.
+Ожидаемая цепочка вызовов во время выполнения:
+
+    openfll -> PyFLL -> PyFLL._core -> OFLL::Linear::SugenoEngine
+
+Приведенный ниже класс сохраняется для целей статического анализа и генерации документации. 
+При наличии встроенного бэкенда `SugenoEngine` заменяется на `PyFLL.SugenoEngine`.
 """
 from __future__ import annotations
 
-import os
-import sys
-from typing import List, Literal, Optional, Tuple, Union
+import importlib
+from collections.abc import Mapping
+from typing import Literal
+from weakref import WeakKeyDictionary
 
-__all__ = ["SugenoEngine", "MfType", "TNorms", "SNorms"]
+__all__ = [
+    "SugenoEngine",
+    "MfType",
+    "TNorms",
+    "SNorms",
+    "constant",
+    "triangular",
+    "trapezoidal",
+    "gaussian",
+]
+
+_BACKEND_IMPORT_ERROR: BaseException | None = None
+_ENGINE_INPUT_NAMES: WeakKeyDictionary[object, list[str]] = WeakKeyDictionary()
+_ENGINE_OUTPUT_NAMES: WeakKeyDictionary[object, list[str]] = WeakKeyDictionary()
+
+
+def _backend_error_message() -> str:
+    reason = ""
+    if _BACKEND_IMPORT_ERROR is not None:
+        reason = (
+            f"\nИсходная причина: "
+            f"{type(_BACKEND_IMPORT_ERROR).__name__}: {_BACKEND_IMPORT_ERROR}"
+        )
+    return (
+        "openfll не смог загрузить внутренний backend `PyFLL` или его "
+        "native module `PyFLL._core`.\n"
+        "Проверьте, что пакет установлен из wheel, собранного вместе с "
+        "native backend: `pip install openfll`."
+        f"{reason}"
+    )
 
 
 # ============================================================================
 # Literal типы — экспортируются для IDE/mkdocstrings
 # ============================================================================
 MfType = Literal[
-    "constant", "triangular", "trapezoidal", "gaussian", "polynomial"
+    "constant", "triangular", "trapezoidal", "gaussian"
 ]
 TNorms = Literal[
     "min", "prod_and", "bounded_diff", "drastic_prod", "einstein_prod", "hamacher_prod"
@@ -34,65 +63,119 @@ SNorms = Literal[
 ]
 
 
-# ============================================================================
-# Стаб SugenoEngine — для IDE / mkdocstrings / mypy
-# ============================================================================
+def constant(value: float) -> list[float]:
+    """Вернуть параметры для constant membership function."""
+    return [value]
+
+
+def triangular(a: float, b: float, c: float) -> list[float]:
+    """Вернуть параметры для triangular membership function в порядке a, b, c."""
+    return [a, b, c]
+
+
+def trapezoidal(a: float, b: float, c: float, d: float) -> list[float]:
+    """Вернуть параметры для trapezoidal membership function в порядке a, b, c, d."""
+    return [a, b, c, d]
+
+
+def gaussian(*, center: float, sigma: float) -> list[float]:
+    """Вернуть параметры для gaussian membership function в порядке center, sigma."""
+    return [center, sigma]
+
+
+def _install_scalar_predict(engine_cls: type) -> None:
+    """Добавить Python convenience predict к настоящему native engine class."""
+    required_methods = (
+        "add_input_var",
+        "add_output_var",
+        "set_input",
+        "calculate",
+        "get_output",
+    )
+    if getattr(engine_cls, "_openfll_predict_installed", False):
+        return
+    if not all(hasattr(engine_cls, name) for name in required_methods):
+        return
+
+    native_add_input_var = engine_cls.add_input_var
+    native_add_output_var = engine_cls.add_output_var
+
+    def add_input_var(self, name: str) -> None:
+        native_add_input_var(self, name)
+        _ENGINE_INPUT_NAMES.setdefault(self, []).append(name)
+
+    def add_output_var(self, name: str) -> None:
+        native_add_output_var(self, name)
+        _ENGINE_OUTPUT_NAMES.setdefault(self, []).append(name)
+
+    def predict(
+        self,
+        inputs: Mapping[str, float],
+        output_name: str | None = None,
+    ) -> float:
+        """Выполнить scalar inference через set_input -> calculate -> get_output."""
+        if not isinstance(inputs, Mapping):
+            raise TypeError("inputs must be a mapping of input name to scalar value")
+
+        input_names = _ENGINE_INPUT_NAMES.get(self, [])
+        if input_names:
+            missing = [name for name in input_names if name not in inputs]
+            if missing:
+                raise ValueError(
+                    "predict inputs missing registered input variables: "
+                    + ", ".join(missing)
+                )
+
+        resolved_output_name = output_name
+        if resolved_output_name is None:
+            output_names = _ENGINE_OUTPUT_NAMES.get(self, [])
+            if len(output_names) == 1:
+                resolved_output_name = output_names[0]
+            else:
+                raise ValueError(
+                    "predict requires output_name unless exactly one output "
+                    "variable was registered through add_output_var"
+                )
+
+        for name, value in inputs.items():
+            self.set_input(name, value)
+        self.calculate()
+        return self.get_output(resolved_output_name)
+
+    engine_cls.add_input_var = add_input_var
+    engine_cls.add_output_var = add_output_var
+    engine_cls.predict = predict
+    engine_cls._openfll_predict_installed = True
+
+
 class SugenoEngine:
-    """Linear facade for Sugeno fuzzy logic model.
-
-    Two forms of rules are supported:
-      - Textual: add_rule('IF x1 IS "low" AND x2 IS "high" THEN y IS "open"')
-        Supports AND/OR with optional [norm_name] for explicit t/s-norms.
-      - Structural (tuple): add_rule(
-            antecedent=[("x1", "low"), ("x2", "high")],
-            consequent=[("y", "open")],
-            t_norm="prod_and",
-        )
-        Preferred for programmatic rule generation; AND-only.
-
-    See docs at https://spars-tusur.github.io/openfll-python/
-    """
+    """Placeholder, который заменяется реальным PyFLL.SugenoEngine."""
 
     def __init__(self) -> None:
-        """Create an empty Sugeno engine."""
-        ...
-
-    def add_input_var(self, name: str) -> None: ...
-    def add_output_var(self, name: str) -> None: ...
-
-    def add_membership_func(
-        self,
-        var_name: str,
-        mf_name: str,
-        type: MfType,
-        params: Union[List[float], Tuple[float, ...]],
-    ) -> None: ...
-
-    def add_rule(self, rule: str) -> None: ...
-    def add_rule(
-        self,
-        antecedent: List[Tuple[str, str]],
-        consequent: List[Tuple[str, str]],
-        t_norm: Union[TNorms, str, None] = None,
-        s_norm: Union[SNorms, str, None] = None,
-    ) -> None: ...
-    def set_default_t_norm(self, name: TNorms) -> None: ...
-    def set_default_s_norm(self, name: SNorms) -> None: ...
-    def build(self) -> None: ...
-    def set_input(self, name: str, value: float) -> None: ...
-    def get_output(self, name: str) -> float: ...
-    def calculate(self) -> None: ...
-    def is_built(self) -> bool: ...
+        """Создать engine или явно сообщить, что native backend не загружен."""
+        raise ImportError(_backend_error_message()) from _BACKEND_IMPORT_ERROR
 
 
 # ============================================================================
-# Runtime: загрузка из _core.pyd через стандартный import.
+# Время выполнения: загрузка существующего пакета бэкенда. openfll намеренно не
+# импортирует и не включает в поставку собственное расширение _core.
 # ============================================================================
 try:
-    from ._core import SugenoEngine as _RealSugenoEngine
+    _PyFLL = importlib.import_module("PyFLL")
+    _RealSugenoEngine = _PyFLL.SugenoEngine
+    if getattr(_RealSugenoEngine, "__module__", "") != "PyFLL._core":
+        raise ImportError(
+            "PyFLL импортирован, но PyFLL.SugenoEngine не загружен из "
+            f"PyFLL._core (получен модуль "
+            f"{getattr(_RealSugenoEngine, '__module__', '<unknown>')!r})"
+        )
+
     SugenoEngine = _RealSugenoEngine
+    _install_scalar_predict(SugenoEngine)
+    del _PyFLL
     del _RealSugenoEngine
-except ImportError:
-    # _core.pyd не найден (например, при mkdocs build без wheel). Стаб
-    # остаётся; инстанцирование SugenoEngine() упадёт с понятной ошибкой.
+except ImportError as exc:
+    # Для документации и type checking стаб остаётся доступным, но в обычном
+    # runtime его нельзя использовать как рабочий engine.
+    _BACKEND_IMPORT_ERROR = exc
     pass
