@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import os
 import sys
-from typing import List, Literal, Optional, Tuple, Union
+from typing import TYPE_CHECKING, List, Literal, Optional, Tuple, Union
 
 __all__ = ["SugenoEngine", "MfType", "TNorms", "SNorms"]
 
@@ -96,3 +96,27 @@ except ImportError:
     # _core.pyd не найден (например, при mkdocs build без wheel). Стаб
     # остаётся; инстанцирование SugenoEngine() упадёт с понятной ошибкой.
     pass
+
+
+# ============================================================================
+# Python-only helpers (`openfll._helpers.*`).
+#
+# Эти модули используют ТОЛЬКО публичный Python-API (SugenoEngine) и
+# развиваются независимо от C++ ядра. В минорных релизах wheel они могут
+# расти свободно, не требуя пересборки .pyd.
+#
+# Импортируем здесь, чтобы коллеги могли:
+#   from openfll import monte_carlo
+# вместо
+#   from openfll._helpers.sampling import monte_carlo
+# ============================================================================
+if TYPE_CHECKING:
+    # Для IDE / mypy / mkdocstrings — type hints подтягиваются без runtime-импорта.
+    from ._helpers.sampling import check_output_finite, grid_2d, monte_carlo
+else:
+    try:
+        from ._helpers.sampling import check_output_finite, grid_2d, monte_carlo
+        __all__ = [*__all__, "monte_carlo", "grid_2d", "check_output_finite"]
+    except ImportError:
+        # Минимальная установка (только wheel, без _helpers) — fallback.
+        pass
