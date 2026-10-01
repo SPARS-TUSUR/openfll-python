@@ -73,3 +73,10 @@ Wheel под `cp314-cp314-win_amd64` и `cp314-cp314-mingw_x86_64_msvcrt_gnu` с
 - GitHub: [SPARS-TUSUR/openfll-python](https://github.com/SPARS-TUSUR/openfll-python)
 - C++ ядро: [SPARS-TUSUR/fuzzy-logic-library](https://github.com/SPARS-TUSUR/fuzzy-logic-library)
 - Документация: [spars-tusur.github.io/openfll-python](https://spars-tusur.github.io/openfll-python/)
+
+## Где расширять API
+
+| Хочется | Где писать |
+|---------|-----------|
+| Новый helper (visualization, batch, sklearn-обёртка) | [contributing-python-api.md](contributing-python-api.md) — здесь, в `openfll/_helpers/` |
+| Новая MF / t/s-норма / метод SugenoEngine | upstream C++ → [RELEASE_TO_PYTHON.md](https://github.com/SPARS-TUSUR/fuzzy-logic-library/blob/main/docs/RELEASE_TO_PYTHON.md) |

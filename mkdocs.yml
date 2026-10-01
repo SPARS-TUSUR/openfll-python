@@ -84,6 +84,7 @@ nav:
     - Отчёты по фазам: architecture/phase-reports.md
   - Сборка: build.md
   - Contributing: contributing.md
+  - Contributing (Python API): contributing-python-api.md
 
 # Не включено в навигацию:
 # - requirements.docx (наш внутренний документ с обсуждением, не для публикации)

@@ -177,3 +177,32 @@ class SugenoEngine:
     def is_built(self) -> bool:
         """Вернуть True после успешного build()."""
         ...
+
+
+# ============================================================================
+# Python-only helpers (submodule `openfll._helpers`).
+# Сигнатуры ниже — ручные type hints; runtime-импорт через `openfll.__init__`.
+# ============================================================================
+def monte_carlo(
+    engine: SugenoEngine,
+    var_inputs: list[tuple[str, tuple[float, float]]],
+    var_outputs: list[str],
+    n_samples: int = 1000,
+    seed: int | None = None,
+) -> list[dict[str, float]]: ...
+def grid_2d(
+    engine: SugenoEngine,
+    x_var: str,
+    y_var: str,
+    x_range: tuple[float, float],
+    y_range: tuple[float, float],
+    out_var: str,
+    n: int = 20,
+) -> tuple[list[float], list[float], list[list[float]]]: ...
+def check_output_finite(
+    engine: SugenoEngine,
+    var_inputs: list[tuple[str, tuple[float, float]]],
+    var_outputs: list[str],
+    n_samples: int = 1000,
+    seed: int | None = None,
+) -> dict[str, int]: ...

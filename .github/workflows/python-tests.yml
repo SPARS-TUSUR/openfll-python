@@ -1,0 +1,47 @@
+name: Python API tests
+
+# Быстрый smoke-check для openfll Python-API:
+#   - импорт работает
+#   - базовые методы SugenoEngine работают
+#   - Python-only helpers из openfll._helpers работают
+#
+# Запускается при каждом push в main и при PR. Использует уже установленный
+# wheel (на текущий момент — Windows-only: cp314-cp314-win_amd64).
+#
+# wheel.yml — отдельный workflow для пересборки .pyd (триггер: tag v*).
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test-windows:
+    name: pytest on Windows + Python 3.14
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - name: Install openfll wheel
+        # На текущий момент официального wheel на PyPI нет — ставим из GitHub
+        # Release (см. .github/workflows/wheel.yml, который прикрепляет wheel
+        # к Release при публикации тега v*).
+        # Для PR из форка используем версию, совпадающую с wheel.yml.
+        run: |
+          pip install --upgrade pip
+          # Сначала пробуем из PyPI (когда опубликуем)
+          pip install openfll==0.1.0 || \
+            pip install https://github.com/SPARS-TUSUR/openfll-python/releases/download/v0.1.0/openfll-0.1.0-cp314-cp314-win_amd64.whl
+
+      - name: Install test deps
+        run: pip install pytest
+
+      - name: Run pytest
+        run: pytest tests/ -v
+
+      - name: Run example as integration check
+        run: python examples/01_basic.py
