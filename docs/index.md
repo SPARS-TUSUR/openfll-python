@@ -4,7 +4,7 @@
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)]()
 [![Build Status](https://github.com/SPARS-TUSUR/fuzzy-logic-library/actions/workflows/cpp-tests.yml/badge.svg)]()
-[![Python](https://img.shields.io/badge/python-3.10-blue.svg)]()
+[![Python](https://img.shields.io/badge/python-3.14-blue.svg)]()
 
 ## Что это
 
@@ -19,18 +19,18 @@ OpenFLL — это компактная, статически линкуемая
 
 - **Sugeno 0-го порядка** — рабочий, с WTAver-дефуззификацией (WTSum доступен)
 - **Mamdani** — в процессе реализации (дефаззификация через интегрирование)
-- **5 типов функций принадлежности**: constant, triangular, trapezoidal, gaussian, polynomial
+- **4 типа функций принадлежности**: constant, triangular, trapezoidal, gaussian
 - **6 t-норм и 6 s-норм** с явным выбором в правиле
 - **Linear Facade** — единый плоский API, скрывающий fluent-цепочки ядра
-- **Pybind11-биндинги** — `import PyFLL; engine = PyFLL.SugenoEngine()`
+- **Pybind11-биндинги** — `import openfll; engine = openfll.SugenoEngine()`
 - **Type stubs** — `.pyi` с `Literal`-типами для автодополнения в IDE
 
 ## 30 секунд до первого расчёта
 
 ```python
-import PyFLL
+import openfll
 
-e = PyFLL.SugenoEngine()
+e = openfll.SugenoEngine()
 e.add_input_var("x1")
 e.add_input_var("x2")
 e.add_output_var("y")
