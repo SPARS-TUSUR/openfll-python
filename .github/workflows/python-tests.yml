@@ -5,8 +5,8 @@ name: Python API tests
 #   - базовые методы SugenoEngine работают
 #   - Python-only helpers из openfll._helpers работают
 #
-# Запускается при каждом push в main и при PR. Собирает PyFLL backend,
-# затем тестирует Python-слой из текущего checkout.
+# Запускается при каждом push в main и при PR. Использует Python-слой из
+# текущего checkout и bundled PyFLL backend из src/PyFLL.
 #
 # wheel.yml — отдельный workflow для пересборки .pyd (триггер: tag v*).
 
@@ -21,16 +21,6 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-
-      - name: Checkout backend
-        uses: actions/checkout@v4
-        with:
-          repository: SPARS-TUSUR/fuzzy-logic-library
-          ref: python/newpybind
-          path: fuzzy-logic-library
-          submodules: recursive
 
       - uses: msys2/setup-msys2@v2
         with:
@@ -38,39 +28,9 @@ jobs:
           update: true
           install: >-
             git
-            base-devel
-            mingw-w64-ucrt-x86_64-toolchain
-            mingw-w64-ucrt-x86_64-cmake
-            mingw-w64-ucrt-x86_64-ninja
             mingw-w64-ucrt-x86_64-python
             mingw-w64-ucrt-x86_64-python-numpy
             mingw-w64-ucrt-x86_64-python-pytest
-            mingw-w64-ucrt-x86_64-pybind11
-            mingw-w64-ucrt-x86_64-ccache
-
-      - name: Build PyFLL backend
-        shell: msys2 {0}
-        run: |
-          set -e
-          PYTHON_EXE=/ucrt64/bin/python.exe
-          cmake -S fuzzy-logic-library -B fuzzy-logic-library/build_release -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_C_COMPILER=gcc \
-            -DCMAKE_CXX_COMPILER=g++ \
-            -DPython3_EXECUTABLE="$PYTHON_EXE"
-          cmake --build fuzzy-logic-library/build_release -j 4 --target PyFLL
-
-      - name: Copy PyFLL backend package
-        shell: msys2 {0}
-        run: |
-          set -e
-          rm -rf src/PyFLL
-          mkdir -p src/PyFLL
-          cp fuzzy-logic-library/src/PyFLL/__init__.py src/PyFLL/
-          cp fuzzy-logic-library/build_release/src/PyFLL/PyFLL.pyi src/PyFLL/
-          cp fuzzy-logic-library/build_release/src/PyFLL/_core*.pyd src/PyFLL/
-          cp fuzzy-logic-library/build_release/src/PyFLL/*.dll src/PyFLL/ || true
-          cp /ucrt64/bin/libpython3.14.dll src/PyFLL/
 
       - name: Run pytest
         shell: msys2 {0}
