@@ -9,6 +9,25 @@
 `.github/workflows/wheel.yml` собирает wheel для Python 3.14 (MinGW)
 и прикрепляет его к GitHub Release.
 
+## Модель поставки backend
+
+`PyFLL` не подключается как внешняя package dependency. Для ближайшего релиза
+он поставляется как внутренний backend package внутри того же wheel, что и
+`openfll`.
+
+Release-сборка временно собирает `PyFLL._core` из ветки
+`fuzzy-logic-library/python/newpybind`, потому что native `predict_batch`
+пока находится там до merge обратно в `python/pybind`.
+после чего копирует в `openfll-python/src/PyFLL/`:
+
+- `__init__.py` из backend source;
+- `PyFLL.pyi`;
+- `_core.<SOABI>.pyd`;
+- runtime `.dll`.
+
+Пользователь импортирует только `openfll`; цепочка исполнения остаётся
+`openfll -> PyFLL -> PyFLL._core`.
+
 Шаги:
 1. Сделать `git tag v0.1.0` и `git push origin v0.1.0`
 2. CI собирает wheel на `windows-latest` (MinGW GCC + MSYS2 Python 3.14)
@@ -22,6 +41,7 @@
 - CMake 3.30+, Ninja
 - Python 3.14 через MSYS2: `pacman -S mingw-w64-x86_64-python`
 - pybind11: `pacman -S mingw-w64-x86_64-pybind11`
+- NumPy для batch API: `pacman -S mingw-w64-x86_64-python-numpy`
 - cibuildwheel: `pip install cibuildwheel`
 
 ### Шаги
@@ -29,6 +49,7 @@
 ```bash
 # 1. Клонировать приватный OpenFLL рядом (или использовать submodule)
 git clone https://github.com/SPARS-TUSUR/fuzzy-logic-library.git ../fuzzy-logic-library
+git -C ../fuzzy-logic-library checkout python/newpybind
 
 # 2. Сконфигурировать и собрать C++ для MinGW-Python 3.14
 cd ../fuzzy-logic-library
@@ -39,15 +60,16 @@ cmake -S . -B build_release -G Ninja \
     -DPython3_EXECUTABLE=/mingw64/bin/python.exe
 cmake --build build_release -j 4 --target PyFLL
 
-# 3. Скопировать .pyd в публичный пакет
-PYD=$(ls build_release/src/PyFLL/PyFLL.cp314-*.pyd)
-cp "$PYD" ../openfll-python/src/openfll/$(basename $PYD | sed 's/^PyFLL/openfll/')
+# 3. Скопировать внутренний backend package PyFLL в публичный wheel source
+rm -rf ../openfll-python/src/PyFLL
+mkdir -p ../openfll-python/src/PyFLL
+cp src/PyFLL/__init__.py ../openfll-python/src/PyFLL/
+cp build_release/src/PyFLL/PyFLL.pyi ../openfll-python/src/PyFLL/
+cp build_release/src/PyFLL/_core*.pyd ../openfll-python/src/PyFLL/
+cp build_release/src/PyFLL/*.dll ../openfll-python/src/PyFLL/ || true
 
-# Скопировать MinGW runtime DLL (нужны для запуска wheel)
-cp /mingw64/bin/libstdc++-6.dll        ../openfll-python/src/openfll/
-cp /mingw64/bin/libgcc_s_seh-1.dll     ../openfll-python/src/openfll/
-cp /mingw64/bin/libwinpthread-1.dll   ../openfll-python/src/openfll/
-cp /mingw64/bin/libpython3.14.dll     ../openfll-python/src/openfll/
+# Скопировать Python runtime DLL рядом с PyFLL._core
+cp /mingw64/bin/libpython3.14.dll ../openfll-python/src/PyFLL/
 
 # 4. Собрать wheel
 cd ../openfll-python
@@ -65,11 +87,16 @@ openfll-python/
 ├── BUILD.md               ← этот файл
 ├── pyproject.toml         ← конфиг wheel + cibuildwheel
 ├── src/
-│   └── openfll/
+│   ├── openfll/
 │       ├── __init__.py     ← runtime loader + стаб SugenoEngine
 │       └── __init__.pyi    ← type stubs для IDE
+│   └── PyFLL/              ← внутренний backend package, копируется при release
+│       ├── __init__.py
+│       ├── _core.*.pyd
+│       ├── PyFLL.pyi
+│       └── *.dll
 ├── tests/
-│   └── __init__.py         ← smoke-тест wheel-а
+│   └── test_backend_contract.py
 ├── mkdocs.yml             ← конфиг документации
 ├── docs/                  ← исходники документации (mkdocs)
 └── .github/

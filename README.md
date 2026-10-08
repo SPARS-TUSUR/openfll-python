@@ -22,9 +22,13 @@ e = openfll.SugenoEngine()
 e.add_input_var("x1")
 e.add_input_var("x2")
 e.add_output_var("y")
-e.add_membership_func("x1", "low", "triangular", [-10, 0, 10])
-e.add_membership_func("x2", "high", "gaussian", [5, 2])
-e.add_membership_func("y", "lo", "constant", [10.0])
+e.add_membership_func(
+    "x1", "low", "triangular", openfll.triangular(-10, 0, 10)
+)
+e.add_membership_func(
+    "x2", "high", "gaussian", openfll.gaussian(center=5, sigma=2)
+)
+e.add_membership_func("y", "lo", "constant", openfll.constant(10.0))
 
 # Две формы правил: текстовая (AND/OR + [norm_name]) и кортежная (для циклов).
 e.add_rule(
@@ -37,6 +41,9 @@ e.set_input("x1", 5.0)
 e.set_input("x2", 0.0)
 e.calculate()
 print(e.get_output("y"))
+
+# Удобная scalar-форма поверх того же workflow:
+print(e.predict({"x1": 5.0, "x2": 0.0}))
 ```
 
 ## Установка
@@ -62,10 +69,54 @@ pip install openfll
 
 ## Что внутри wheel
 
-- `openfll.cp314-...pyd` — скомпилированное расширение
-- `openfll.pyi` — type stubs с `Literal` типами для IDE
-- `libstdc++-6.dll`, `libgcc_s_seh-1.dll`, `libwinpthread-1.dll`, `libpython3.14.dll` — MinGW/Python runtime
-- `__init__.py` — runtime loader + stub для IDE/документации
+- `openfll/` — публичный Python API и type stubs.
+- `PyFLL/` — внутренний backend package, поставляется в том же wheel.
+- `PyFLL/_core.cp314-...pyd` — скомпилированное native extension.
+- `PyFLL/PyFLL.pyi` — backend type stubs для IDE.
+- `PyFLL/*.dll` — MinGW/Python runtime рядом с native extension.
+
+Пользовательский код импортирует только `openfll`; `PyFLL` и `PyFLL._core`
+остаются деталью реализации wheel.
+
+## Scalar predict
+
+`engine.predict({"x1": 5.0, "x2": 0.0})` — это Python convenience поверх
+`set_input -> calculate -> get_output`, а не native vectorization. Если модель
+имеет ровно один output, зарегистрированный через `add_output_var`, его имя
+определяется автоматически. Для multi-output передайте `output_name`.
+
+## Native batch predict
+
+`engine.predict_batch(X, input_names=[...])` выполняет batch inference в native
+C++ backend. `input_names` задаёт соответствие колонок массива input-переменным:
+
+```python
+import numpy as np
+import openfll
+
+X = np.array(
+    [
+        [1.0, 2.0],
+        [3.0, 4.0],
+    ],
+    dtype=np.float64,
+)
+
+y = engine.predict_batch(
+    X,
+    input_names=["x1", "x2"],
+)
+```
+
+В v1 поддерживается single-output engine: результат имеет форму `(n_samples,)`
+и dtype `float64`.
+
+## Ошибка загрузки backend
+
+Если wheel собран или установлен без внутреннего backend `PyFLL._core`,
+создание engine сразу завершится ошибкой `ImportError` с исходной причиной.
+Такой пакет считается поломанной установкой; рабочий wheel должен содержать
+`PyFLL/_core.cp314-...pyd` и runtime DLL рядом с ним.
 
 ## Сборка из исходников
 

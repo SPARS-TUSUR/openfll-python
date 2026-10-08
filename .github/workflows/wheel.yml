@@ -24,6 +24,16 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Checkout backend
+        uses: actions/checkout@v4
+        with:
+          repository: SPARS-TUSUR/fuzzy-logic-library
+          # Временная зависимость Sprint 9: native predict_batch находится в
+          # python/newpybind до merge обратно в python/pybind.
+          ref: python/newpybind
+          path: fuzzy-logic-library
+          submodules: recursive
+
       - uses: msys2/setup-msys2@v2
         with:
           msystem: MINGW64
@@ -44,26 +54,28 @@ jobs:
           set -e
           PYTHON_EXE=/mingw64/bin/python.exe
           echo "Using Python: $PYTHON_EXE"
-          cmake -S . -B build_release -G Ninja \
+          cmake -S fuzzy-logic-library -B fuzzy-logic-library/build_release -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_C_COMPILER=gcc \
             -DCMAKE_CXX_COMPILER=g++ \
             -DPython3_EXECUTABLE="$PYTHON_EXE"
-          cmake --build build_release -j 4 --target PyFLL
-          # Проверяем, что .pyd создан
-          ls -la build_release/src/PyFLL/*.pyd
+          cmake --build fuzzy-logic-library/build_release -j 4 --target PyFLL
+          # Проверяем, что native backend artifact создан
+          ls -la fuzzy-logic-library/build_release/src/PyFLL/
 
-      - name: Copy .pyd into package
+      - name: Copy PyFLL backend package
         shell: bash
         run: |
-          PYD=$(ls build_release/src/PyFLL/PyFLL.cp314-*.pyd)
-          cp "$PYD" "src/openfll/$(basename $PYD | sed 's/^PyFLL/openfll/')"
-          # Копируем MinGW runtime DLL
-          cp /mingw64/bin/libstdc++-6.dll      src/openfll/
-          cp /mingw64/bin/libgcc_s_seh-1.dll    src/openfll/
-          cp /mingw64/bin/libwinpthread-1.dll  src/openfll/
-          cp /mingw64/bin/libpython3.14.dll    src/openfll/
-          ls -la src/openfll/
+          rm -rf src/PyFLL
+          mkdir -p src/PyFLL
+          cp fuzzy-logic-library/src/PyFLL/__init__.py src/PyFLL/
+          cp fuzzy-logic-library/build_release/src/PyFLL/PyFLL.pyi src/PyFLL/
+          cp fuzzy-logic-library/build_release/src/PyFLL/_core*.pyd src/PyFLL/
+          cp fuzzy-logic-library/build_release/src/PyFLL/*.dll src/PyFLL/ || true
+          # Копируем Python runtime DLL рядом с PyFLL._core, остальные DLL уже
+          # копирует backend CMake при MinGW-сборке.
+          cp /mingw64/bin/libpython3.14.dll src/PyFLL/
+          ls -la src/PyFLL/
 
       - name: Build wheel with cibuildwheel
         shell: bash

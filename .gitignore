@@ -47,3 +47,5 @@ htmlcov/
 *.dll
 *.pyd
 *.so
+!src/PyFLL/*.dll
+!src/PyFLL/*.pyd
