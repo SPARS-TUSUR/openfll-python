@@ -5,6 +5,7 @@ import math
 import sys
 from pathlib import Path
 
+import numpy as np
 import pytest
 
 
@@ -233,3 +234,87 @@ def test_native_backend_rejects_invalid_rule_text():
 
     with pytest.raises(ValueError, match="Rule parse error"):
         engine.add_rule("not a rule")
+
+
+def test_native_predict_unified_single_input_scalar_and_sequence():
+    openfll = _import_native_openfll()
+    e = openfll.SugenoEngine()
+    e.add_input_var("x")
+    e.add_output_var("y")
+    e.add_membership_func("x", "low", "triangular", [-10, 0, 10])
+    e.add_membership_func("y", "out", "constant", [2.5])
+    e.add_rule('IF x IS "low" AND x IS "low" THEN y IS "out"')
+    e.build()
+
+    # Scalar input (float and int)
+    assert math.isclose(e.predict(0.0), 2.5, abs_tol=1e-9)
+    assert math.isclose(e.predict(0), 2.5, abs_tol=1e-9)
+
+    # Mapping
+    assert math.isclose(e.predict({"x": 0.0}), 2.5, abs_tol=1e-9)
+
+    # Sequence for single sample
+    assert math.isclose(e.predict([0.0]), 2.5, abs_tol=1e-9)
+    assert math.isclose(e.predict((0.0,)), 2.5, abs_tol=1e-9)
+
+    # 1D numpy array single sample
+    assert math.isclose(e.predict(np.array([0.0])), 2.5, abs_tol=1e-9)
+
+    # 1D numpy array multi-sample batch for 1-input model
+    batch_res = e.predict(np.array([0.0, 0.0, 0.0]))
+    assert isinstance(batch_res, np.ndarray)
+    assert batch_res.shape == (3,)
+    assert np.allclose(batch_res, [2.5, 2.5, 2.5], atol=1e-9)
+
+    # 2D numpy array batch
+    batch_2d = e.predict(np.array([[0.0], [0.0]]))
+    assert isinstance(batch_2d, np.ndarray)
+    assert batch_2d.shape == (2,)
+    assert np.allclose(batch_2d, [2.5, 2.5], atol=1e-9)
+
+
+def test_native_predict_unified_multi_input():
+    openfll = _import_native_openfll()
+    engine = _build_full_engine(openfll)
+
+    # Dict
+    y_dict = engine.predict({"x1": 5.0, "x2": 0.0})
+    assert math.isclose(y_dict, 20.0, abs_tol=1e-9)
+
+    # List and tuple (single sample)
+    assert math.isclose(engine.predict([5.0, 0.0]), 20.0, abs_tol=1e-9)
+    assert math.isclose(engine.predict((5.0, 0.0)), 20.0, abs_tol=1e-9)
+
+    # 1D numpy array (single sample)
+    assert math.isclose(engine.predict(np.array([5.0, 0.0])), 20.0, abs_tol=1e-9)
+
+    # Scalar on multi-input raises ValueError
+    with pytest.raises(ValueError, match="Model requires 2 inputs"):
+        engine.predict(5.0)
+
+    # Sequence with wrong number of elements raises ValueError
+    with pytest.raises(ValueError, match="Expected 2 inputs"):
+        engine.predict([5.0])
+
+    # 2D numpy array without explicit input_names (auto-inferred from registered inputs)
+    X = np.array([[5.0, 0.0], [0.0, 0.0]], dtype=np.float64)
+    y_batch = engine.predict(X)
+    assert isinstance(y_batch, np.ndarray)
+    assert y_batch.shape == (2,)
+    assert math.isclose(y_batch[0], 20.0, abs_tol=1e-9)
+    assert math.isclose(y_batch[1], 10.0, abs_tol=1e-9)
+
+    # 2D numpy array with explicit input_names
+    y_batch_explicit = engine.predict(X, input_names=["x1", "x2"])
+    assert np.allclose(y_batch, y_batch_explicit, atol=1e-9)
+
+    # Nested sequence (list of lists)
+    y_nested = engine.predict([[5.0, 0.0], [0.0, 0.0]])
+    assert isinstance(y_nested, np.ndarray)
+    assert np.allclose(y_nested, y_batch, atol=1e-9)
+
+    # Invalid types
+    with pytest.raises(TypeError):
+        engine.predict("invalid_input")
+    with pytest.raises(TypeError):
+        engine.predict(True)

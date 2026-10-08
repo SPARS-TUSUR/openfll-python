@@ -13,9 +13,14 @@
 from __future__ import annotations
 
 import importlib
-from collections.abc import Mapping
-from typing import TYPE_CHECKING, Literal
+from collections.abc import Mapping, Sequence
+from typing import TYPE_CHECKING, Any, Literal
 from weakref import WeakKeyDictionary
+
+try:
+    import numpy as _np
+except ImportError:
+    _np = None  # type: ignore[assignment]
 
 __all__ = [
     "SugenoEngine",
@@ -108,18 +113,14 @@ def _install_scalar_predict(engine_cls: type) -> None:
         native_add_output_var(self, name)
         _ENGINE_OUTPUT_NAMES.setdefault(self, []).append(name)
 
-    def predict(
+    def _run_scalar(
         self,
-        inputs: Mapping[str, float],
+        scalar_inputs: Mapping[str, float],
         output_name: str | None = None,
     ) -> float:
-        """Выполнить scalar inference через set_input -> calculate -> get_output."""
-        if not isinstance(inputs, Mapping):
-            raise TypeError("inputs must be a mapping of input name to scalar value")
-
         input_names = _ENGINE_INPUT_NAMES.get(self, [])
         if input_names:
-            missing = [name for name in input_names if name not in inputs]
+            missing = [name for name in input_names if name not in scalar_inputs]
             if missing:
                 raise ValueError(
                     "predict inputs missing registered input variables: "
@@ -137,10 +138,92 @@ def _install_scalar_predict(engine_cls: type) -> None:
                     "variable was registered through add_output_var"
                 )
 
-        for name, value in inputs.items():
+        for name, value in scalar_inputs.items():
             self.set_input(name, value)
         self.calculate()
         return self.get_output(resolved_output_name)
+
+    def predict(
+        self,
+        inputs: Any,
+        output_name: str | None = None,
+        *,
+        input_names: Sequence[str] | None = None,
+    ) -> Any:
+        """Выполнить inference для скаляра, словаря, последовательности или NumPy-батча."""
+        if isinstance(inputs, Mapping):
+            return _run_scalar(self, inputs, output_name)
+
+        if _np is not None and isinstance(inputs, _np.ndarray):
+            if inputs.ndim == 2:
+                resolved_input_names = input_names
+                if resolved_input_names is None:
+                    registered = _ENGINE_INPUT_NAMES.get(self, [])
+                    if not registered:
+                        raise ValueError(
+                            "predict with 2D array requires input_names or previously registered input variables"
+                        )
+                    resolved_input_names = registered
+                return self.predict_batch(inputs, input_names=resolved_input_names)
+            if inputs.ndim == 1:
+                registered = _ENGINE_INPUT_NAMES.get(self, [])
+                if len(registered) == 1:
+                    if inputs.shape[0] == 1:
+                        return _run_scalar(self, {registered[0]: float(inputs[0])}, output_name)
+                    resolved_input_names = input_names or registered
+                    return self.predict_batch(inputs.reshape(-1, 1), input_names=resolved_input_names)
+                if len(registered) > 1 and inputs.shape[0] == len(registered):
+                    sample_dict = {name: float(val) for name, val in zip(registered, inputs)}
+                    return _run_scalar(self, sample_dict, output_name)
+                raise ValueError(
+                    f"1D array of shape {inputs.shape} does not match {len(registered)} registered input variables ({', '.join(registered)})"
+                )
+            if inputs.ndim == 0:
+                inputs = float(inputs)
+
+        is_scalar = (
+            isinstance(inputs, (int, float))
+            or (_np is not None and isinstance(inputs, _np.number))
+        ) and not isinstance(inputs, bool)
+        if is_scalar:
+            registered = _ENGINE_INPUT_NAMES.get(self, [])
+            if len(registered) == 1:
+                return _run_scalar(self, {registered[0]: float(inputs)}, output_name)
+            if len(registered) == 0:
+                raise ValueError("No input variables registered to map scalar input")
+            raise ValueError(
+                f"Model requires {len(registered)} inputs ({', '.join(registered)}), "
+                f"but a single scalar was provided. Provide a dict, sequence, or 2D array."
+            )
+
+        if isinstance(inputs, (list, tuple)):
+            if len(inputs) == 0:
+                raise ValueError("inputs sequence cannot be empty")
+            if isinstance(inputs[0], (list, tuple)) or (_np is not None and isinstance(inputs[0], _np.ndarray)):
+                if _np is None:
+                    raise RuntimeError("NumPy is required for batch inference")
+                arr = _np.asarray(inputs)
+                resolved_input_names = input_names
+                if resolved_input_names is None:
+                    registered = _ENGINE_INPUT_NAMES.get(self, [])
+                    if not registered:
+                        raise ValueError(
+                            "predict with batch sequence requires input_names or previously registered input variables"
+                        )
+                    resolved_input_names = registered
+                return self.predict_batch(arr, input_names=resolved_input_names)
+
+            registered = _ENGINE_INPUT_NAMES.get(self, [])
+            if len(inputs) != len(registered):
+                raise ValueError(
+                    f"Expected {len(registered)} inputs ({', '.join(registered)}), but got {len(inputs)} values in sequence"
+                )
+            sample_dict = {name: float(val) for name, val in zip(registered, inputs)}
+            return _run_scalar(self, sample_dict, output_name)
+
+        raise TypeError(
+            f"inputs must be a mapping, scalar number, sequence, or numpy ndarray, got {type(inputs).__name__}"
+        )
 
     engine_cls.add_input_var = add_input_var
     engine_cls.add_output_var = add_output_var
