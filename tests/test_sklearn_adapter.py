@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import math
+import pickle
 import numpy as np
 import pytest
 
@@ -333,3 +334,151 @@ def test_scikit_learn_cross_val_score_integration():
     assert len(scores) == 3
     # Check that scores are finite numbers
     assert all(np.isfinite(scores))
+
+
+def test_pickle_serialization_roundtrip():
+    """SugenoRegressor serializes cleanly with pickle both unfitted and fitted."""
+    spec = _make_sample_spec()
+
+    # 1. Unfitted roundtrip
+    unfitted_reg = SugenoRegressor(model_spec=spec, solver="lstsq", alpha=0.0)
+    data = pickle.dumps(unfitted_reg)
+    restored_unfitted = pickle.loads(data)
+    assert not hasattr(restored_unfitted, "engine_")
+    assert not hasattr(restored_unfitted, "coef_")
+    assert restored_unfitted.solver == "lstsq"
+
+    # 2. Fitted roundtrip
+    reg = SugenoRegressor(model_spec=spec, solver="lstsq", alpha=0.0)
+    X = np.array([[0.0, 0.0], [10.0, 10.0]])
+    y = np.array([1.5, 4.5])
+    reg.fit(X, y)
+
+    orig_pred = reg.predict(X)
+    data = pickle.dumps(reg)
+    restored = pickle.loads(data)
+
+    assert hasattr(restored, "engine_")
+    assert hasattr(restored, "coef_")
+    assert hasattr(restored, "rule_names_")
+    assert np.allclose(restored.coef_, reg.coef_)
+    assert restored.rule_names_ == reg.rule_names_
+
+    restored_pred = restored.predict(X)
+    assert np.allclose(restored_pred, orig_pred)
+
+
+def test_solver_lstsq_and_ridge_strict_semantics():
+    """Strict semantics: solver='lstsq' requires alpha=0.0, solver='ridge' requires alpha>0.0."""
+    spec = _make_sample_spec()
+    X = np.array([[0.0, 0.0], [10.0, 10.0]])
+    y = np.array([1.5, 4.5])
+
+    # solver='lstsq' with alpha > 0 fails
+    with pytest.raises(ValueError, match="solver='lstsq' does not support L2 regularization"):
+        SugenoRegressor(model_spec=spec, solver="lstsq", alpha=0.5).fit(X, y)
+
+    # solver='ridge' with alpha == 0 fails
+    with pytest.raises(ValueError, match="solver='ridge' requires alpha > 0.0"):
+        SugenoRegressor(model_spec=spec, solver="ridge", alpha=0.0).fit(X, y)
+
+    # solver='ridge' with alpha < 0 fails
+    with pytest.raises(ValueError, match="alpha must be non-negative and finite"):
+        SugenoRegressor(model_spec=spec, solver="ridge", alpha=-0.1).fit(X, y)
+
+    # Valid solver runs succeed
+    reg_lstsq = SugenoRegressor(model_spec=spec, solver="lstsq", alpha=0.0).fit(X, y)
+    assert reg_lstsq.coef_ is not None
+
+    reg_ridge = SugenoRegressor(model_spec=spec, solver="ridge", alpha=0.1).fit(X, y)
+    assert reg_ridge.coef_ is not None
+
+
+def test_alpha_nan_inf_validation():
+    """Non-finite or boolean values for alpha raise informative ValueError."""
+    spec = _make_sample_spec()
+    X = np.array([[0.0, 0.0], [10.0, 10.0]])
+    y = np.array([1.5, 4.5])
+
+    for bad_alpha in [np.nan, np.inf, -np.inf, True, False]:
+        with pytest.raises(ValueError, match="alpha must be non-negative and finite"):
+            SugenoRegressor(model_spec=spec, alpha=bad_alpha).fit(X, y)
+
+
+def test_model_spec_deep_freezing():
+    """SugenoModelSpec deeply freezes nested inputs and rules into immutable tuples."""
+    raw_inputs = {
+        "x1": [["x1_low", "triangular", [-10.0, 0.0, 10.0]]],
+    }
+    raw_rules = [
+        ["IF x1 IS x1_low THEN y IS c1"],
+    ]
+    spec = SugenoModelSpec(inputs=raw_inputs, rules=raw_rules, consequents=["c1"])
+
+    # Attempting to mutate nested MF tuple raises TypeError
+    with pytest.raises(TypeError):
+        spec.inputs["x1"][0][2][0] = 999.0
+
+    # Attempting to mutate rules tuple raises TypeError
+    with pytest.raises(TypeError):
+        spec.rules[0] = "new rule"
+
+    # Attempting to mutate top-level attributes raises FrozenInstanceError
+    with pytest.raises(Exception):
+        spec.output_name = "other"
+
+
+def test_explicit_consequents_validation():
+    """model_spec.consequents validates duplicates, missing items, and unused items."""
+    spec_base = _make_sample_spec()
+    X = np.array([[0.0, 0.0], [10.0, 10.0]])
+    y = np.array([1.5, 4.5])
+
+    # 1. Duplicates
+    spec_dups = SugenoModelSpec(
+        inputs=spec_base.inputs,
+        rules=spec_base.rules,
+        consequents=["c1", "c1"],
+    )
+    with pytest.raises(ValueError, match="duplicate names"):
+        SugenoRegressor(model_spec=spec_dups).fit(X, y)
+
+    # 2. Missing consequents referenced in rules (c2 missing)
+    spec_missing = SugenoModelSpec(
+        inputs=spec_base.inputs,
+        rules=spec_base.rules,
+        consequents=["c1"],
+    )
+    with pytest.raises(ValueError, match="is missing consequents referenced in rules"):
+        SugenoRegressor(model_spec=spec_missing).fit(X, y)
+
+    # 3. Extra unused consequents not in rules (c_extra not in rules)
+    spec_unused = SugenoModelSpec(
+        inputs=spec_base.inputs,
+        rules=spec_base.rules,
+        consequents=["c1", "c2", "c_extra"],
+    )
+    with pytest.raises(ValueError, match="defines consequents not referenced by any rule"):
+        SugenoRegressor(model_spec=spec_unused).fit(X, y)
+
+    # 4. Valid explicit consequents matching rules succeeds
+    spec_valid = SugenoModelSpec(
+        inputs=spec_base.inputs,
+        rules=spec_base.rules,
+        consequents=["c2", "c1"],  # reversed order
+    )
+    reg = SugenoRegressor(model_spec=spec_valid).fit(X, y)
+    assert reg.consequents_ == ["c2", "c1"]
+
+
+def test_rule_names_fitted_attribute():
+    """SugenoRegressor populates rule_names_ upon fitting."""
+    spec = _make_sample_spec()
+    reg = SugenoRegressor(model_spec=spec)
+    X = np.array([[0.0, 0.0], [10.0, 10.0]])
+    y = np.array([1.5, 4.5])
+    reg.fit(X, y)
+
+    assert hasattr(reg, "rule_names_")
+    assert reg.rule_names_ == ["rule_0", "rule_1"]
+

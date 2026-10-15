@@ -215,10 +215,10 @@ def test_grid_search_cv_on_real_hyperparameters():
     X = rng.uniform(1.0, 7.0, size=(60, 2))
     y = 2.0 * X[:, 0] + 3.0 * X[:, 1]
 
-    param_grid = {
-        "solver": ["lstsq", "ridge"],
-        "alpha": [0.0, 0.05, 0.5],
-    }
+    param_grid = [
+        {"solver": ["lstsq"], "alpha": [0.0]},
+        {"solver": ["ridge"], "alpha": [0.05, 0.5]},
+    ]
 
     grid = GridSearchCV(reg, param_grid, cv=3, scoring="neg_mean_squared_error")
     grid.fit(X, y)

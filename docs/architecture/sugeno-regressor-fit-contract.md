@@ -122,7 +122,7 @@ class SugenoRegressor(BaseEstimator, RegressorMixin):
 | Категория | Имена атрибутов | Назначение |
 |:---|:---|:---|
 | **Гиперпараметры** (задаются в `__init__`, варьируются в `GridSearchCV`) | `model_spec`<br>`default_t_norm`<br>`default_s_norm`<br>`solver`<br>`alpha` | Определяют топологию нечёткой модели, нормы и параметры регуляризатора МНК |
-| **Обученные атрибуты** (появляются **только** после успешного `fit()`, оканчиваются на `_`) | `engine_`<br>`n_features_in_`<br>`feature_names_in_`<br>`coef_`<br>`consequents_`<br>`rule_names_` | Содержат скомпилированное C++ ядро с найденными константами, число признаков и значения коэффициентов |
+| **Обученные атрибуты** (появляются **только** после успешного `fit()`, оканчиваются на `_`) | `engine_`<br>`n_features_in_`<br>`feature_names_in_`<br>`coef_`<br>`consequents_`<br>`rule_names_`<br>`rank_` | Содержат скомпилированное C++ ядро с найденными константами, число признаков, список заключений, идентификаторы правил и численный ранг матрицы влияния |
 
 ### 4.3. Совместное использование терминов заключений (Parameter Sharing)
 Если несколько правил ссылаются на один и тот же терм заключения (например, правило 1 и правило 3 имеют следствие `THEN y IS "medium"`):
@@ -134,17 +134,25 @@ class SugenoRegressor(BaseEstimator, RegressorMixin):
 ### 4.4. Жизненный цикл `fit(X, y)`
 ```python
 def fit(self, X, y) -> "SugenoRegressor":
-    # 1. Валидация входных массивов
-    X, y = check_X_y(X, y, accept_sparse=False, dtype=np.float64, y_numeric=True)
-    
-    # 2. Проверка соответствия размерности X числу входов в model_spec
-    # 3. Извлечение матрицы влияния правил / констант
-    # 4. Решение задачи МНК (Ridge при alpha > 0)
-    # 5. Построение НОВОГО SugenoEngine(), регистрация MF и правил, build()
-    # 6. Сохранение обученных атрибутов (self.engine_, self.coef_, self.n_features_in_)
+    # 1. Валидация гиперпараметров (alpha >= 0, конечное число; solver in ('lstsq', 'ridge'))
+    #    - solver='lstsq' требует alpha == 0.0 (чистый МНК через np.linalg.lstsq)
+    #    - solver='ridge' требует alpha > 0.0 (L2-регуляризация через np.linalg.solve)
+    # 2. Валидация входных массивов (check_X_y, accept_sparse=False, dtype=np.float64)
+    # 3. Проверка соответствия размерности X числу входов в model_spec
+    # 4. Проверка и валидация consequents (отсутствие дубликатов, соответствие правилам)
+    # 5. Извлечение матрицы влияния правил / констант A(X)
+    # 6. Решение задачи МНК (lstsq или Ridge)
+    # 7. Построение НОВОГО SugenoEngine(), регистрация MF и правил, build()
+    # 8. Сохранение обученных атрибутов (self.engine_, self.coef_, self.consequents_,
+    #    self.rule_names_, self.rank_, self.n_features_in_)
     return self
 ```
 * Повторный вызов `fit()` полностью пересоздаёт `engine_` и сбрасывает предыдущее состояние.
+
+### 4.5. Сериализация (pickle / joblib)
+* `SugenoRegressor` поддерживает сохранение и загрузку через `pickle` / `joblib`.
+* В `__getstate__` нативный C++ экземпляр `engine_` исключается из сериализуемого состояния.
+* В `__setstate__` скомпилированное C++ ядро автоматически восстанавливается с помощью `_build_engine` на основе `model_spec`, `consequents_` и `coef_`.
 
 ### 4.5. Контракт `predict(X)`
 ```python

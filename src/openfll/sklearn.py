@@ -83,26 +83,53 @@ _THEN_RE = re.compile(
 )
 
 
+def _deep_freeze_structure(obj: Any) -> Any:
+    """Рекурсивно преобразует списки в кортежи для защиты от случайной мутации."""
+    if isinstance(obj, (list, tuple)):
+        return tuple(_deep_freeze_structure(x) for x in obj)
+    if isinstance(obj, dict):
+        return {k: _deep_freeze_structure(v) for k, v in obj.items()}
+    return obj
+
+
 @dataclass(frozen=True)
 class SugenoModelSpec:
-    """Декларативная спецификация структуры модели Sugeno (неизменяемая и clone-safe).
+    """Декларативная спецификация структуры модели Sugeno для SugenoRegressor.
+
+    Корневой класс заморожен (@dataclass(frozen=True)), а вложенные списки
+    определений функций принадлежности и правил при инициализации приводятся
+    к неизменяемым кортежам (tuple) для clone-safe использования в scikit-learn.
 
     Attributes:
-        inputs: словарь соответствия имени входной переменной списку определений MF:
+        inputs: словарь соответствия имени входной переменной кортежу определений MF:
             (mf_name, mf_type, params).
-        rules: список текстовых правил или кортежей правил.
+        rules: кортеж текстовых правил или кортежей правил.
         output_name: имя целевой выходной переменной.
-        consequents: явный список имён констант заключений (если None, извлекаются из rules).
+        consequents: явный кортеж имён констант заключений (если None, извлекаются из rules).
         default_t_norm: t-норма по умолчанию для правил без явного указания.
         default_s_norm: s-норма по умолчанию.
     """
 
     inputs: Mapping[str, Sequence[Any]] = field(default_factory=dict)
-    rules: Sequence[Any] = field(default_factory=list)
+    rules: Sequence[Any] = field(default_factory=tuple)
     output_name: str = "y"
     consequents: Sequence[str] | None = None
     default_t_norm: str | None = None
     default_s_norm: str | None = None
+
+    def __post_init__(self) -> None:
+        frozen_inputs = {
+            str(var): tuple(_deep_freeze_structure(mf) for mf in mfs)
+            for var, mfs in self.inputs.items()
+        }
+        object.__setattr__(self, "inputs", frozen_inputs)
+        object.__setattr__(
+            self,
+            "rules",
+            tuple(_deep_freeze_structure(r) for r in self.rules),
+        )
+        if self.consequents is not None:
+            object.__setattr__(self, "consequents", tuple(str(c) for c in self.consequents))
 
 
 class SugenoRegressor(BaseEstimator, RegressorMixin):
@@ -117,12 +144,13 @@ class SugenoRegressor(BaseEstimator, RegressorMixin):
         default_t_norm: t-норма по умолчанию для нечётких правил ("min", "prod_and", ...).
         default_s_norm: s-норма по умолчанию ("max", "algebraic_sum", ...).
         solver: Алгоритм решения задачи регрессии ("lstsq" или "ridge").
-        alpha: Параметр регуляризации (L2) для Ridge (при alpha=0 используется чистый МНК).
+        alpha: Параметр регуляризации (L2) для Ridge (требуется alpha > 0 при solver='ridge').
 
     Атрибуты после обучения:
         engine_: Обученный нативный экземпляр openfll.SugenoEngine.
         coef_: 1D массив подобранных констант заключений правил (np.float64).
         consequents_: Список имён констант заключений, соответствующих coef_.
+        rule_names_: Список имён правил ('rule_0', 'rule_1', ...).
         n_features_in_: Число входных признаков обучающей выборки.
         feature_names_in_: Имена признаков (если передавались через DataFrame).
         rank_: Численный ранг матрицы влияния правил (design matrix).
@@ -143,6 +171,20 @@ class SugenoRegressor(BaseEstimator, RegressorMixin):
         self.solver = solver
         self.alpha = alpha
 
+    def __getstate__(self) -> dict[str, Any]:
+        """Возвращает состояние для сериализации через pickle/joblib без нативного engine_."""
+        state = self.__dict__.copy()
+        state.pop("engine_", None)
+        return state
+
+    def __setstate__(self, state: dict[str, Any]) -> None:
+        """Восстанавливает состояние и пересоздаёт C++ engine_ при десериализации."""
+        self.__dict__.update(state)
+        if hasattr(self, "coef_") and hasattr(self, "consequents_") and self.model_spec is not None:
+            spec = self._normalize_spec()
+            fitted_vals = {name: float(self.coef_[m]) for m, name in enumerate(self.consequents_)}
+            self.engine_ = self._build_engine(spec, fitted_vals, self.consequents_)
+
     def _normalize_spec(self) -> SugenoModelSpec:
         """Привести model_spec к нормализованному экземпляру SugenoModelSpec."""
         if self.model_spec is None:
@@ -162,13 +204,10 @@ class SugenoRegressor(BaseEstimator, RegressorMixin):
             f"model_spec must be SugenoModelSpec or Mapping, got {type(self.model_spec).__name__}"
         )
 
-    def _resolve_consequents(self, spec: SugenoModelSpec) -> list[str]:
-        """Извлечь или проверить список уникальных имён констант заключений правил."""
-        if spec.consequents is not None:
-            return list(spec.consequents)
-
+    def _extract_rule_consequents(self, rules: Sequence[Any]) -> list[str]:
+        """Извлечь уникальные имена констант заключений из списка правил в порядке появления."""
         consequents: list[str] = []
-        for rule in spec.rules:
+        for rule in rules:
             if isinstance(rule, str):
                 match = _THEN_RE.search(rule)
                 if not match:
@@ -213,6 +252,47 @@ class SugenoRegressor(BaseEstimator, RegressorMixin):
                 raise TypeError(f"Unsupported rule format: {type(rule).__name__}")
 
         return consequents
+
+    def _resolve_consequents(self, spec: SugenoModelSpec) -> list[str]:
+        """Извлечь и провалидировать список уникальных имён констант заключений правил."""
+        rule_consequents = self._extract_rule_consequents(spec.rules)
+        if not rule_consequents:
+            raise ValueError("No consequent membership functions found in model_spec rules.")
+
+        if spec.consequents is not None:
+            consequents_list = list(spec.consequents)
+            if not consequents_list:
+                raise ValueError("model_spec.consequents cannot be empty.")
+
+            # Проверка на дубликаты
+            if len(set(consequents_list)) != len(consequents_list):
+                seen: set[str] = set()
+                dups: list[str] = []
+                for c in consequents_list:
+                    if c in seen and c not in dups:
+                        dups.append(c)
+                    seen.add(c)
+                raise ValueError(f"model_spec.consequents contains duplicate names: {dups}")
+
+            # Проверка соответствия именам в правилах
+            rule_set = set(rule_consequents)
+            spec_set = set(consequents_list)
+
+            missing_in_spec = rule_set - spec_set
+            if missing_in_spec:
+                raise ValueError(
+                    f"model_spec.consequents is missing consequents referenced in rules: {sorted(missing_in_spec)}"
+                )
+
+            unused_in_rules = spec_set - rule_set
+            if unused_in_rules:
+                raise ValueError(
+                    f"model_spec.consequents defines consequents not referenced by any rule: {sorted(unused_in_rules)}"
+                )
+
+            return consequents_list
+
+        return rule_consequents
 
     def _build_engine(
         self,
@@ -269,8 +349,10 @@ class SugenoRegressor(BaseEstimator, RegressorMixin):
         if self.model_spec is None:
             raise ValueError("model_spec must be specified before calling fit().")
 
-        if self.alpha < 0.0:
-            raise ValueError(f"Regularization parameter alpha must be non-negative, got {self.alpha}")
+        if isinstance(self.alpha, bool) or not np.isfinite(self.alpha) or self.alpha < 0.0:
+            raise ValueError(
+                f"Regularization parameter alpha must be non-negative and finite, got {self.alpha}"
+            )
 
         spec = self._normalize_spec()
         if not spec.inputs:
@@ -330,20 +412,24 @@ class SugenoRegressor(BaseEstimator, RegressorMixin):
 
         # Решение задачи наименьших квадратов
         if self.solver == "lstsq":
-            if self.alpha == 0.0:
-                coef, _, rank, _ = np.linalg.lstsq(A, y_arr, rcond=None)
-            else:
-                reg_mat = A.T @ A + self.alpha * np.eye(M, dtype=np.float64)
-                rhs = A.T @ y_arr
-                coef = np.linalg.solve(reg_mat, rhs)
-                rank = int(np.linalg.matrix_rank(A))
+            if self.alpha != 0.0:
+                raise ValueError(
+                    f"solver='lstsq' does not support L2 regularization (got alpha={self.alpha}). "
+                    f"Set solver='ridge' to use L2 regularization, or set alpha=0.0."
+                )
+            coef, _, rank, _ = np.linalg.lstsq(A, y_arr, rcond=None)
         elif self.solver == "ridge":
+            if self.alpha <= 0.0:
+                raise ValueError(
+                    f"solver='ridge' requires alpha > 0.0, got {self.alpha}. "
+                    f"Use solver='lstsq' for unregularized least squares."
+                )
             reg_mat = A.T @ A + self.alpha * np.eye(M, dtype=np.float64)
             rhs = A.T @ y_arr
             coef = np.linalg.solve(reg_mat, rhs)
             rank = int(np.linalg.matrix_rank(A))
         else:
-            raise ValueError(f"Unknown solver: {self.solver!r}. Supported: 'lstsq', 'ridge'")
+            raise ValueError(f"Unknown solver: {self.solver!r}. Supported solvers are 'lstsq' and 'ridge'.")
 
         # Создаём и компилируем итоговый обученный engine с найденными константами
         fitted_vals = {name: float(coef[m]) for m, name in enumerate(consequent_names)}
@@ -353,6 +439,7 @@ class SugenoRegressor(BaseEstimator, RegressorMixin):
         self.engine_ = fitted_engine
         self.coef_ = np.asarray(coef, dtype=np.float64)
         self.consequents_ = list(consequent_names)
+        self.rule_names_ = [f"rule_{i}" for i in range(len(spec.rules))]
         self.rank_ = int(rank)
         self.n_features_in_ = X_arr.shape[1]
         if feature_names is not None:
