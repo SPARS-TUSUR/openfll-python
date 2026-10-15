@@ -423,6 +423,25 @@ def test_model_spec_deep_freezing():
     with pytest.raises(TypeError):
         spec.rules[0] = "new rule"
 
+    # Attempting to add or delete keys in inputs mapping raises TypeError
+    with pytest.raises(TypeError):
+        spec.inputs["x3"] = ()
+
+    with pytest.raises(TypeError):
+        del spec.inputs["x1"]
+
+    # Attempting to mutate mapping-based rules raises TypeError
+    dict_rule_spec = SugenoModelSpec(
+        inputs=raw_inputs,
+        rules=[{"antecedent": [("x1", "x1_low")], "consequent": [("y", "c1")]}],
+        consequents=["c1"],
+    )
+    with pytest.raises(TypeError):
+        dict_rule_spec.rules[0]["new_key"] = 123
+
+    with pytest.raises(TypeError):
+        del dict_rule_spec.rules[0]["consequent"]
+
     # Attempting to mutate top-level attributes raises FrozenInstanceError
     with pytest.raises(Exception):
         spec.output_name = "other"

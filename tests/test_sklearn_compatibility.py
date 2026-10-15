@@ -220,7 +220,7 @@ def test_grid_search_cv_on_real_hyperparameters():
         {"solver": ["ridge"], "alpha": [0.05, 0.5]},
     ]
 
-    grid = GridSearchCV(reg, param_grid, cv=3, scoring="neg_mean_squared_error")
+    grid = GridSearchCV(reg, param_grid, cv=3, scoring="neg_mean_squared_error", error_score="raise")
     grid.fit(X, y)
 
     assert grid.best_estimator_ is not None
@@ -228,6 +228,7 @@ def test_grid_search_cv_on_real_hyperparameters():
     assert hasattr(grid.best_estimator_, "coef_")
     assert grid.best_params_["solver"] in ["lstsq", "ridge"]
     assert grid.best_params_["alpha"] in [0.0, 0.05, 0.5]
+    assert np.all(np.isfinite(grid.cv_results_["mean_test_score"]))
 
     y_pred = grid.predict(X)
     assert y_pred.shape == (60,)

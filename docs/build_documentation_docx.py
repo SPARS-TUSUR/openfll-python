@@ -413,9 +413,13 @@ def main():
         "print('Ранг матрицы влияния:', reg.rank_)\n\n"
         "# 4. Кросс-валидация и подбор регуляризации через GridSearchCV\n"
         "scores = cross_val_score(reg, X_train, y_train, cv=5, scoring='r2')\n"
-        "grid = GridSearchCV(reg, {'alpha': [0.0, 0.01, 0.1, 1.0]}, cv=3)\n"
+        "param_grid = [\n"
+        "    {'solver': ['lstsq'], 'alpha': [0.0]},\n"
+        "    {'solver': ['ridge'], 'alpha': [0.01, 0.1, 1.0]},\n"
+        "]\n"
+        "grid = GridSearchCV(reg, param_grid, cv=3, error_score='raise')\n"
         "grid.fit(X_train, y_train)\n"
-        "print('Лучший параметр alpha:', grid.best_params_)"
+        "print('Лучшие параметры:', grid.best_params_)"
     )
     p_csk = doc.add_paragraph()
     r_csk = p_csk.add_run(code_sklearn)

@@ -75,7 +75,7 @@ except ImportError:
         return X_arr, y_arr
 
 
-__all__ = ["SugenoModelSpec", "SugenoRegressor"]
+__all__ = ["FrozenDict", "SugenoModelSpec", "SugenoRegressor"]
 
 _THEN_RE = re.compile(
     r"\bTHEN\b\s+(?:\w+)\s+\bIS\b\s+[\"']?([^\"'\s,;]+)[\"']?",
@@ -83,27 +83,72 @@ _THEN_RE = re.compile(
 )
 
 
+class FrozenDict(Mapping[str, Any]):
+    """Неизменяемый словарь (immutable mapping) с поддержкой pickle, hash и unpack (**)."""
+
+    def __init__(
+        self,
+        data: Mapping[Any, Any] | Sequence[tuple[Any, Any]] | None = None,
+        **kwargs: Any,
+    ) -> None:
+        raw = dict(data or {}, **kwargs)
+        self._data: dict[Any, Any] = {k: _deep_freeze_structure(v) for k, v in raw.items()}
+        self._hash: int | None = None
+
+    def __getitem__(self, key: Any) -> Any:
+        return self._data[key]
+
+    def __iter__(self) -> Any:
+        return iter(self._data)
+
+    def __len__(self) -> int:
+        return len(self._data)
+
+    def __setitem__(self, key: Any, value: Any) -> None:
+        raise TypeError(f"'{type(self).__name__}' object does not support item assignment")
+
+    def __delitem__(self, key: Any) -> None:
+        raise TypeError(f"'{type(self).__name__}' object does not support item deletion")
+
+    def __repr__(self) -> str:
+        return f"FrozenDict({self._data!r})"
+
+    def __reduce__(self) -> tuple[Any, ...]:
+        return (FrozenDict, (self._data,))
+
+    def __hash__(self) -> int:
+        if self._hash is None:
+            self._hash = hash(frozenset(self._data.items()))
+        return self._hash
+
+    def copy(self) -> dict[Any, Any]:
+        return self._data.copy()
+
+
 def _deep_freeze_structure(obj: Any) -> Any:
-    """Рекурсивно преобразует списки в кортежи для защиты от случайной мутации."""
+    """Рекурсивно преобразует коллекции в неизменяемые структуры (tuple и FrozenDict)."""
+    if isinstance(obj, FrozenDict):
+        return obj
+    if isinstance(obj, Mapping):
+        return FrozenDict(obj)
     if isinstance(obj, (list, tuple)):
         return tuple(_deep_freeze_structure(x) for x in obj)
-    if isinstance(obj, dict):
-        return {k: _deep_freeze_structure(v) for k, v in obj.items()}
     return obj
 
 
 @dataclass(frozen=True)
 class SugenoModelSpec:
-    """Декларативная спецификация структуры модели Sugeno для SugenoRegressor.
+    """Декларативная полностью неизменяемая спецификация структуры модели Sugeno.
 
-    Корневой класс заморожен (@dataclass(frozen=True)), а вложенные списки
-    определений функций принадлежности и правил при инициализации приводятся
-    к неизменяемым кортежам (tuple) для clone-safe использования в scikit-learn.
+    Корневой класс заморожен (@dataclass(frozen=True)), а все вложенные словари и списки
+    определений функций принадлежности и правил при инициализации глубоко замораживаются
+    в неизменяемые структуры (FrozenDict и tuple), гарантируя полную иммутабельность
+    и предотвращая случайное искажение конфигурации обученного регрессора.
 
     Attributes:
-        inputs: словарь соответствия имени входной переменной кортежу определений MF:
+        inputs: неизменяемый словарь (FrozenDict) соответствия имени входа кортежу MF:
             (mf_name, mf_type, params).
-        rules: кортеж текстовых правил или кортежей правил.
+        rules: кортеж текстовых правил, словарей (FrozenDict) или кортежей правил.
         output_name: имя целевой выходной переменной.
         consequents: явный кортеж имён констант заключений (если None, извлекаются из rules).
         default_t_norm: t-норма по умолчанию для правил без явного указания.
@@ -118,10 +163,12 @@ class SugenoModelSpec:
     default_s_norm: str | None = None
 
     def __post_init__(self) -> None:
-        frozen_inputs = {
-            str(var): tuple(_deep_freeze_structure(mf) for mf in mfs)
-            for var, mfs in self.inputs.items()
-        }
+        frozen_inputs = FrozenDict(
+            {
+                str(var): tuple(_deep_freeze_structure(mf) for mf in mfs)
+                for var, mfs in self.inputs.items()
+            }
+        )
         object.__setattr__(self, "inputs", frozen_inputs)
         object.__setattr__(
             self,

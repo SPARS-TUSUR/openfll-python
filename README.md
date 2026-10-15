@@ -87,9 +87,13 @@ print("Найденные константы c_r:", reg.coef_)
 print("Ранг матрицы влияния:", reg.rank_)
 y_pred = reg.predict(X_test)
 
-# 4. Кросс-валидация и решётчатый поиск регуляризации
+# 4. Кросс-валидация и решётчатый поиск гиперпараметров
 cv_scores = cross_val_score(reg, X_train, y_train, cv=5, scoring="r2")
-grid = GridSearchCV(reg, {"alpha": [0.0, 0.01, 0.1, 1.0]}, cv=3)
+param_grid = [
+    {"solver": ["lstsq"], "alpha": [0.0]},
+    {"solver": ["ridge"], "alpha": [0.01, 0.1, 1.0]},
+]
+grid = GridSearchCV(reg, param_grid, cv=3, error_score="raise")
 grid.fit(X_train, y_train)
 ```
 
