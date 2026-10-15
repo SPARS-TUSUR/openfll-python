@@ -446,6 +446,19 @@ def test_model_spec_deep_freezing():
     with pytest.raises(Exception):
         spec.output_name = "other"
 
+    # NumPy arrays and sets inside spec are deeply frozen into immutable tuples and frozensets
+    numpy_spec = SugenoModelSpec(
+        inputs={"x": [("mf", "triangular", np.array([1.0, 2.0, 3.0]))]},
+        rules=["IF x IS mf THEN y IS c1"],
+        consequents=["c1"],
+    )
+    assert isinstance(numpy_spec.inputs["x"][0][2], tuple)
+    with pytest.raises(TypeError):
+        numpy_spec.inputs["x"][0][2][0] = 99.0
+
+    # FrozenDict hashing works cleanly even when initialized with numpy arrays or sets
+    assert isinstance(hash(numpy_spec.inputs), int)
+
 
 def test_explicit_consequents_validation():
     """model_spec.consequents validates duplicates, missing items, and unused items."""

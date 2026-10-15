@@ -126,11 +126,17 @@ class FrozenDict(Mapping[str, Any]):
 
 
 def _deep_freeze_structure(obj: Any) -> Any:
-    """Рекурсивно преобразует коллекции в неизменяемые структуры (tuple и FrozenDict)."""
+    """Рекурсивно преобразует коллекции в неизменяемые структуры (tuple, frozenset и FrozenDict)."""
     if isinstance(obj, FrozenDict):
         return obj
     if isinstance(obj, Mapping):
         return FrozenDict(obj)
+    if isinstance(obj, np.ndarray):
+        if obj.ndim == 0:
+            return obj.item()
+        return tuple(_deep_freeze_structure(x) for x in obj.tolist())
+    if isinstance(obj, (set, frozenset)):
+        return frozenset(_deep_freeze_structure(x) for x in obj)
     if isinstance(obj, (list, tuple)):
         return tuple(_deep_freeze_structure(x) for x in obj)
     return obj
@@ -140,10 +146,10 @@ def _deep_freeze_structure(obj: Any) -> Any:
 class SugenoModelSpec:
     """Декларативная полностью неизменяемая спецификация структуры модели Sugeno.
 
-    Корневой класс заморожен (@dataclass(frozen=True)), а все вложенные словари и списки
-    определений функций принадлежности и правил при инициализации глубоко замораживаются
-    в неизменяемые структуры (FrozenDict и tuple), гарантируя полную иммутабельность
-    и предотвращая случайное искажение конфигурации обученного регрессора.
+    Корневой класс заморожен (@dataclass(frozen=True)), а все вложенные словари,
+    списки, NumPy-массивы и множества при инициализации глубоко замораживаются
+    в неизменяемые структуры (FrozenDict, tuple, frozenset), гарантируя полную
+    иммутабельность и защиту от рассинхронизации инференса обученного регрессора.
 
     Attributes:
         inputs: неизменяемый словарь (FrozenDict) соответствия имени входа кортежу MF:
