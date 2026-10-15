@@ -4,6 +4,7 @@ openfll — пользовательский пакет. Во время вып�
 внутреннему backend-пакету PyFLL, который загружает PyFLL._core.
 """
 from typing import Any, List, Literal, Mapping, Sequence, Tuple, Union, overload
+import numpy as np
 
 MfType = Literal[
     "constant",
@@ -146,18 +147,18 @@ class SugenoEngine:
     @overload
     def predict(
         self,
-        inputs: Mapping[str, float] | float | int | Sequence[float],
+        inputs: Mapping[str, float] | float | int,
         output_name: str | None = None,
     ) -> float: ...
 
     @overload
     def predict(
         self,
-        inputs: Any,
+        inputs: Sequence[float] | Sequence[Sequence[float]] | np.ndarray,
         output_name: str | None = None,
         *,
         input_names: Sequence[str] | None = None,
-    ) -> Any: ...
+    ) -> float | np.ndarray: ...
 
     def predict(
         self,
@@ -165,15 +166,15 @@ class SugenoEngine:
         output_name: str | None = None,
         *,
         input_names: Sequence[str] | None = None,
-    ) -> Any:
+    ) -> float | np.ndarray:
         """Выполнить универсальный inference для скаляра, словаря, последовательности или NumPy-батча.
 
         Args:
             inputs: входные данные:
                 - Mapping[str, float]: словарь входов вида {"x1": 1.0, "x2": 2.0} -> float;
                 - float | int: скалярное значение для модели с ровно одним входом -> float;
-                - Sequence[float]: список значений для одного сэмпла -> float;
-                - 2D ndarray | Sequence[Sequence]: батч сэмплов -> numpy ndarray.
+                - Sequence[float]: список значений для одного сэмпла (многовходовая модель) или батч сэмплов (одновходовая модель) -> float | ndarray;
+                - 1D ndarray / 2D ndarray | Sequence[Sequence]: батч сэмплов -> numpy ndarray.
             output_name: имя целевой выходной переменной (если не передано, используется
                 единственный зарегистрированный output).
             input_names: соответствие колонок именам входных переменных для батч-массива.
