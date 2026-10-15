@@ -652,7 +652,7 @@ set_target_properties(PyFLL PROPERTIES
 
 ---
 
-## 14. Контрольный чек-лист «Definition of Done» для каждой фазы
+## 14. Контрольный чек-лист готовности для каждой фазы
 
 **Фаза 1:**
 - [ ] `SugenoEngine` собирается, тест из 9.2 зелёный, числа совпадают с `compressor.cpp`.

@@ -2,11 +2,9 @@
 
 openfll — пользовательский пакет. Во время выполнения он делегирует работу
 внутреннему backend-пакету PyFLL, который загружает PyFLL._core.
-
-Эти stubs описывают только существующий API. Они намеренно не объявляют
-будущие методы вроде fit, get_params или set_params.
 """
 from typing import Any, List, Literal, Mapping, Sequence, Tuple, Union, overload
+import numpy as np
 
 MfType = Literal[
     "constant",
@@ -146,16 +144,44 @@ class SugenoEngine:
         """Прочитать output-значение после calculate()."""
         ...
 
+    @overload
     def predict(
         self,
-        inputs: Mapping[str, float],
+        inputs: Mapping[str, float] | float | int,
         output_name: str | None = None,
-    ) -> float:
-        """Выполнить scalar inference через set_input, calculate и get_output.
+    ) -> float: ...
 
-        Если у engine ровно один output, зарегистрированный через add_output_var,
-        output_name можно не передавать. Для multi-output или неизвестного
-        Python-side registry передайте output_name явно.
+    @overload
+    def predict(
+        self,
+        inputs: Sequence[float] | Sequence[Sequence[float]] | np.ndarray,
+        output_name: str | None = None,
+        *,
+        input_names: Sequence[str] | None = None,
+    ) -> float | np.ndarray: ...
+
+    def predict(
+        self,
+        inputs: Any,
+        output_name: str | None = None,
+        *,
+        input_names: Sequence[str] | None = None,
+    ) -> float | np.ndarray:
+        """Выполнить универсальный inference для скаляра, словаря, последовательности или NumPy-батча.
+
+        Args:
+            inputs: входные данные:
+                - Mapping[str, float]: словарь входов вида {"x1": 1.0, "x2": 2.0} -> float;
+                - float | int: скалярное значение для модели с ровно одним входом -> float;
+                - Sequence[float]: список значений для одного сэмпла (многовходовая модель) или батч сэмплов (одновходовая модель) -> float | ndarray;
+                - 1D ndarray / 2D ndarray | Sequence[Sequence]: батч сэмплов -> numpy ndarray.
+            output_name: имя целевой выходной переменной (если не передано, используется
+                единственный зарегистрированный output).
+            input_names: соответствие колонок именам входных переменных для батч-массива.
+                Если не указано, берутся имена в порядке регистрации в модели.
+
+        Returns:
+            float для единичного предсказания или ndarray для батча.
         """
         ...
 
