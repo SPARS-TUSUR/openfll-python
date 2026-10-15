@@ -28,7 +28,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: SPARS-TUSUR/fuzzy-logic-library
-          # Временная зависимость Sprint 9: native predict_batch находится в
+          # Native predict_batch находится в
           # python/newpybind до merge обратно в python/pybind.
           ref: python/newpybind
           path: fuzzy-logic-library

@@ -2,9 +2,6 @@
 
 openfll — пользовательский пакет. Во время выполнения он делегирует работу
 внутреннему backend-пакету PyFLL, который загружает PyFLL._core.
-
-Эти stubs описывают только существующий API. Они намеренно не объявляют
-будущие методы вроде fit, get_params или set_params.
 """
 from typing import Any, List, Literal, Mapping, Sequence, Tuple, Union, overload
 
