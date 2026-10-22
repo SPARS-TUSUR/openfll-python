@@ -31,6 +31,7 @@ jobs:
             mingw-w64-ucrt-x86_64-python
             mingw-w64-ucrt-x86_64-python-numpy
             mingw-w64-ucrt-x86_64-python-pytest
+            mingw-w64-ucrt-x86_64-python-scikit-learn
 
       - name: Run pytest
         shell: msys2 {0}

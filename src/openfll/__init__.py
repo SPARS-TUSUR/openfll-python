@@ -186,7 +186,12 @@ def _install_scalar_predict(engine_cls: type) -> None:
         *,
         input_names: Sequence[str] | None = None,
     ) -> Any:
-        """Выполнить inference для скаляра, словаря, последовательности или NumPy-батча."""
+        """Выполнить inference для скаляра, словаря, последовательности или NumPy-батча.
+
+        Предупреждение:
+            Инстанс не является потокобезопасным для инференса. Для многопоточной
+            обработки необходимо клонировать модель или создать независимые экземпляры.
+        """
         if _is_bool(inputs):
             raise TypeError("inputs cannot be a boolean value")
 

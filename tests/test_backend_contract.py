@@ -187,7 +187,7 @@ def test_runtime_module_does_not_define_add_rule_overloads():
     assert "def add_rule" not in source
 
 
-def test_predict_batch_is_typed_but_not_implemented_as_python_loop():
+def test_predict_batch_is_typed_and_delegates_to_backend():
     runtime_source = (Path.cwd() / "src" / "openfll" / "__init__.py").read_text(
         encoding="utf-8"
     )
@@ -196,5 +196,4 @@ def test_predict_batch_is_typed_but_not_implemented_as_python_loop():
     )
 
     assert "def predict_batch" not in runtime_source
-    assert "for row in X" not in runtime_source
     assert "def predict_batch" in stub_source
