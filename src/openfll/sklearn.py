@@ -192,6 +192,9 @@ class SugenoRegressor(BaseEstimator, RegressorMixin):
     методом наименьших квадратов (МНК или Ridge) с использованием нативного
     C++ ядра OpenFLL.
 
+    Методы fit и predict работают с матрицами признаков формы
+    ``(n_samples, n_features)`` в соответствии с интерфейсом scikit-learn.
+
     Параметры:
         model_spec: Декларативная спецификация модели (SugenoModelSpec или dict).
         default_t_norm: t-норма по умолчанию для нечётких правил ("min", "prod_and", ...).
@@ -503,7 +506,11 @@ class SugenoRegressor(BaseEstimator, RegressorMixin):
         return self
 
     def predict(self, X: Any) -> np.ndarray:
-        """Выполнить batch inference на обученной модели."""
+        """Выполнить batch inference на обученной модели.
+
+        Принимает матрицу признаков формы ``(n_samples, n_features)`` и всегда
+        возвращает одномерный массив NumPy формы ``(n_samples,)``.
+        """
         check_is_fitted(self, attributes=["engine_", "coef_"])
 
         feature_names = None
