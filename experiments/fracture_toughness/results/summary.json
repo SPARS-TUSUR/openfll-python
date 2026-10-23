@@ -1,0 +1,160 @@
+{
+  "environment": {
+    "python": "3.14.7 (main, Aug  8 2026, 21:15:19)  [MINGW GCC UCRT 16.2.0 64 bit (AMD64)]",
+    "platform": "Windows-11-10.0.26300-SP0",
+    "numpy": "2.5.3",
+    "openfll_engine_module": "PyFLL._core",
+    "simpful": "2.12.0"
+  },
+  "dataset": {
+    "records": 26,
+    "porosity_values": [
+      7.96274,
+      23.01,
+      27.3715
+    ],
+    "concentrations_mass_pct": [
+      0.0,
+      0.1,
+      0.5
+    ]
+  },
+  "model": {
+    "rules": 26,
+    "p_terms": 3,
+    "a_terms": 26,
+    "c_terms": 26,
+    "grid_size_per_surface": 100,
+    "surface_points_total": 30000,
+    "simpful_surface_sample_points": 300
+  },
+  "fixed_model_training_metrics": {
+    "n": 26,
+    "finite": 26,
+    "nan_or_inf": 0,
+    "mse": 0.0034064026864190082,
+    "rmse": 0.05836439570850544,
+    "mae": 0.03600923756527098,
+    "max_abs_error": 0.17775028797554226,
+    "r2": 0.9443217379540166
+  },
+  "fixed_model_leave_one_out_metrics": {
+    "n": 26,
+    "finite": 26,
+    "nan_or_inf": 0,
+    "mse": 0.01665686202785139,
+    "rmse": 0.12906146608438704,
+    "mae": 0.10780691411666865,
+    "max_abs_error": 0.25961296993797045,
+    "r2": 0.7277406066675407
+  },
+  "fitted_regressor_training_metrics": {
+    "n": 26,
+    "finite": 26,
+    "nan_or_inf": 0,
+    "mse": 2.549575690071275e-30,
+    "rmse": 1.5967390801478102e-15,
+    "mae": 1.2895667439876818e-15,
+    "max_abs_error": 3.9968028886505635e-15,
+    "r2": 1.0
+  },
+  "fitted_regressor": {
+    "rank": 26,
+    "coefficient_count": 26,
+    "coefficient_min": -4.6115156728654885,
+    "coefficient_max": 4.991812186920949
+  },
+  "parity": {
+    "training_openfll_vs_simpful": {
+      "n": 26,
+      "finite_pairs": 26,
+      "nonfinite_pairs": 0,
+      "max_abs_diff": 8.881784197001252e-16,
+      "mean_abs_diff": 2.049642507000289e-16,
+      "rmse_diff": 3.0482570822327486e-16
+    },
+    "training_openfll_vs_numpy": {
+      "n": 26,
+      "finite_pairs": 26,
+      "nonfinite_pairs": 0,
+      "max_abs_diff": 8.881784197001252e-16,
+      "mean_abs_diff": 2.135044278125301e-16,
+      "rmse_diff": 3.20000333841227e-16
+    },
+    "surface_sample_openfll_vs_simpful": {
+      "n": 300,
+      "finite_pairs": 300,
+      "nonfinite_pairs": 0,
+      "max_abs_diff": 6.661338147750939e-16,
+      "mean_abs_diff": 1.1583326890255799e-16,
+      "rmse_diff": 1.85222115515448e-16
+    },
+    "surface_openfll_vs_numpy": {
+      "n": 30000,
+      "finite_pairs": 30000,
+      "nonfinite_pairs": 0,
+      "max_abs_diff": 1.9984014443252818e-15,
+      "mean_abs_diff": 1.268133746161008e-16,
+      "rmse_diff": 1.9612176932438828e-16
+    },
+    "simpful_scalar_vs_strengths_first_5": {
+      "n": 5,
+      "finite_pairs": 5,
+      "nonfinite_pairs": 0,
+      "max_abs_diff": 5.551115123125783e-16,
+      "mean_abs_diff": 2.220446049250313e-16,
+      "rmse_diff": 3.21773202442742e-16
+    }
+  },
+  "surface_ranges": {
+    "openfll_min": 0.4967491406577252,
+    "openfll_max": 1.4245054752241335,
+    "openfll_nonfinite": 0,
+    "simpful_sample_nonfinite": 0,
+    "regressor_min": 0.43613334660691117,
+    "regressor_max": 3.0746837733855177,
+    "regressor_nonfinite": 0
+  },
+  "fixed_model_surface_statistics_by_concentration": {
+    "0.0": {
+      "mean": 0.9149556528513844,
+      "std": 0.24888165920258432,
+      "min": 0.4967491406577252,
+      "max": 1.2293599339255352
+    },
+    "0.1": {
+      "mean": 0.9272639162510055,
+      "std": 0.2407922816252309,
+      "min": 0.4967491406577252,
+      "max": 1.2125240738689245
+    },
+    "0.5": {
+      "mean": 1.067358583097176,
+      "std": 0.12670057835387302,
+      "min": 0.502540516145762,
+      "max": 1.4245054752241335
+    }
+  },
+  "timings": {
+    "openfll_seconds": 0.11606479994952679,
+    "numpy_seconds": 0.05657320003956556,
+    "simpful_seconds": 2.882016699993983,
+    "sugeno_regressor_seconds": 0.6608443999430165,
+    "fixed_model_leave_one_out_seconds": 0.015707100043073297
+  },
+  "plots": [
+    "surface_openfll_0.0.png",
+    "difference_openfll_numpy_0.0.png",
+    "surface_openfll_0.1.png",
+    "difference_openfll_numpy_0.1.png",
+    "surface_openfll_0.5.png",
+    "difference_openfll_numpy_0.5.png"
+  ],
+  "limitations": [
+    "The supplied article does not include the optimized Gaussian centers and sigmas.",
+    "This run uses deterministic neighbor-based initial widths, not the article's genetic optimization.",
+    "Training metrics are in-sample reproduction metrics and do not measure unseen physical concentrations.",
+    "Leave-one-out validation holds out observations but still evaluates only the three experimentally measured porosity levels.",
+    "Simpful surface parity uses a deterministic stratified sample because its rule evaluation is scalar and much slower than OpenFLL batch inference."
+  ]
+}
