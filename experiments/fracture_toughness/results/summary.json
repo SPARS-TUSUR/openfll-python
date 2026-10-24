@@ -64,14 +64,80 @@
     "r2": 0.9443217379540166
   },
   "niihara_validation": {
-    "status": "not_run_missing_external_reference",
-    "required_columns": [
-      "P",
-      "a",
-      "c",
-      "KIC"
+    "status": "completed_external_reference",
+    "role": "full theoretical reference; excluded from training and rule construction",
+    "source": {
+      "format": "paired_xlsx",
+      "predictors_path": "C:\\Users\\matve\\Downloads\\Training Data_predictors.xlsx",
+      "response_path": "C:\\Users\\matve\\Downloads\\Training Data_response.xlsx"
+    },
+    "records": 30000,
+    "porosity_values": [
+      7.96274,
+      23.01,
+      27.3715
     ],
-    "reason": "The supplied files do not contain the Niihara model-data array or the physical parameters required to reconstruct it independently."
+    "theoretical_KIC_range": {
+      "min": 0.2242733432058058,
+      "max": 1.950306847211885
+    },
+    "predicted_KIC_range": {
+      "min": 0.4968008871472827,
+      "max": 1.424490010301572
+    },
+    "metrics": {
+      "n": 30000,
+      "finite": 30000,
+      "nan_or_inf": 0,
+      "mse": 0.05846069936946215,
+      "rmse": 0.2417864747446849,
+      "mae": 0.18718455875048456,
+      "max_abs_error": 0.8939996869474323,
+      "r2": 0.5094886019108119
+    },
+    "metrics_by_porosity": [
+      {
+        "P": 7.96274,
+        "n": 10000,
+        "finite": 10000,
+        "nan_or_inf": 0,
+        "mse": 0.10383842699211714,
+        "rmse": 0.32223970424532905,
+        "mae": 0.2665910367126097,
+        "max_abs_error": 0.8939996869474323,
+        "r2": 0.23179376933410423
+      },
+      {
+        "P": 23.01,
+        "n": 10000,
+        "finite": 10000,
+        "nan_or_inf": 0,
+        "mse": 0.041334458683866544,
+        "rmse": 0.20330877670151515,
+        "mae": 0.15701556722513638,
+        "max_abs_error": 0.7191275166828934,
+        "r2": 0.6309982089688717
+      },
+      {
+        "P": 27.3715,
+        "n": 10000,
+        "finite": 10000,
+        "nan_or_inf": 0,
+        "mse": 0.030209212432402786,
+        "rmse": 0.173807975744506,
+        "mae": 0.1379470723137077,
+        "max_abs_error": 0.5585069163191494,
+        "r2": 0.6739982241829995
+      }
+    ],
+    "implementation_parity_openfll_vs_numpy": {
+      "n": 30000,
+      "finite_pairs": 30000,
+      "nonfinite_pairs": 0,
+      "max_abs_diff": 1.3322676295501878e-15,
+      "mean_abs_diff": 1.3124316448435516e-16,
+      "rmse_diff": 1.9987303722255138e-16
+    }
   },
   "parity": {
     "training_openfll_vs_simpful": {
@@ -180,10 +246,11 @@
     "mean_KIC_max": 1.067358583097176
   },
   "timings": {
-    "openfll_seconds": 0.2887419000035152,
-    "numpy_seconds": 0.12547319999430329,
-    "simpful_seconds": 2.929142399923876,
-    "porosity_sweep_seconds": 15.453765399986878
+    "openfll_seconds": 0.3196199999656528,
+    "numpy_seconds": 0.1580186999635771,
+    "simpful_seconds": 6.826898999977857,
+    "niihara_reference_seconds": 3.840353099978529,
+    "porosity_sweep_seconds": 21.81789750000462
   },
   "plots": [
     "surface_openfll_0.0.png",
@@ -192,14 +259,16 @@
     "surface_openfll_0.3.png",
     "surface_openfll_0.4.png",
     "surface_openfll_0.5.png",
+    "niihara_reference_parity.png",
+    "niihara_absolute_error_maps.png",
     "mean_kic_vs_porosity.png"
   ],
   "limitations": [
     "The supplied article does not include the optimized Gaussian centers and sigmas.",
     "This run uses deterministic neighbor-based initial widths, not the article's genetic optimization.",
     "All 26 experimental records are training data; training metrics are not reported as test accuracy.",
-    "The supplied files do not include the Niihara model-data array or all physical parameters required to reproduce it independently.",
-    "External Niihara validation is supported through --niihara-reference and is not replaced by calibration on the training records.",
+    "The theoretical reference is evaluated only after model construction and is never used to fit rules, membership functions or consequents.",
+    "The external theoretical values validate agreement with the supplied analytical surface; they are not additional physical experiments.",
     "Intermediate-concentration surfaces are model predictions and have no independent experimental ground truth.",
     "Simpful surface parity uses a deterministic stratified sample because its rule evaluation is scalar and much slower than OpenFLL batch inference."
   ]

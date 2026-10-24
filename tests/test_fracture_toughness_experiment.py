@@ -13,6 +13,8 @@ from experiments.fracture_toughness.run_experiment import (
     create_surface_points,
     load_observations,
     load_niihara_reference,
+    load_niihara_workbooks,
+    metric_summary_by_porosity,
     observations_to_arrays,
     porosity_axis,
     predict_numpy,
@@ -85,6 +87,65 @@ def test_external_niihara_reference_loader(tmp_path):
     assert X.shape == (2, 3)
     assert y.tolist() == pytest.approx([0.75, 1.64])
     assert np.all(np.isfinite(X))
+
+
+def test_external_niihara_workbook_pair_loader(tmp_path):
+    openpyxl = pytest.importorskip("openpyxl")
+    predictors_path = tmp_path / "predictors.xlsx"
+    response_path = tmp_path / "response.xlsx"
+
+    predictors = openpyxl.Workbook()
+    predictors.active.append(["a", "c", "P", "c/a"])
+    predictors.active.append([14.0, 48.0, 27.3715, 48.0 / 14.0])
+    predictors.active.append([39.0, 109.0, 7.96274, 109.0 / 39.0])
+    predictors.save(predictors_path)
+
+    response = openpyxl.Workbook()
+    response.active.append(["Kc"])
+    response.active.append([0.75])
+    response.active.append([1.64])
+    response.save(response_path)
+
+    X, y = load_niihara_workbooks(predictors_path, response_path)
+    assert np.allclose(X, [[27.3715, 14.0, 48.0], [7.96274, 39.0, 109.0]])
+    assert y.tolist() == pytest.approx([0.75, 1.64])
+
+
+def test_external_niihara_workbook_pair_rejects_misaligned_rows(tmp_path):
+    openpyxl = pytest.importorskip("openpyxl")
+    predictors_path = tmp_path / "predictors.xlsx"
+    response_path = tmp_path / "response.xlsx"
+
+    predictors = openpyxl.Workbook()
+    predictors.active.append(["a", "c", "P", "c/a"])
+    predictors.active.append([14.0, 48.0, 27.3715, 48.0 / 14.0])
+    predictors.active.append([39.0, 109.0, 7.96274, 109.0 / 39.0])
+    predictors.save(predictors_path)
+
+    response = openpyxl.Workbook()
+    response.active.append(["Kc"])
+    response.active.append([0.75])
+    response.save(response_path)
+
+    with pytest.raises(ValueError, match="different row counts"):
+        load_niihara_workbooks(predictors_path, response_path)
+
+
+def test_theoretical_metrics_are_grouped_by_porosity():
+    X = np.asarray(
+        [
+            [7.0, 14.0, 48.0],
+            [7.0, 15.0, 49.0],
+            [23.0, 14.0, 48.0],
+            [23.0, 15.0, 49.0],
+        ]
+    )
+    y_true = np.asarray([1.0, 2.0, 1.0, 3.0])
+    y_pred = np.asarray([1.0, 2.0, 2.0, 3.0])
+    metrics = metric_summary_by_porosity(X, y_true, y_pred)
+    assert [row["P"] for row in metrics] == [7.0, 23.0]
+    assert metrics[0]["mse"] == pytest.approx(0.0)
+    assert metrics[1]["mse"] == pytest.approx(0.5)
 
 
 def test_simpful_matches_openfll_and_its_scalar_sugeno_inference():

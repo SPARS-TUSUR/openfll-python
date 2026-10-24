@@ -292,6 +292,24 @@ def metric_summary(y_true: np.ndarray, y_pred: np.ndarray) -> dict[str, float | 
     }
 
 
+def metric_summary_by_porosity(
+    X: np.ndarray,
+    y_true: np.ndarray,
+    y_pred: np.ndarray,
+) -> list[dict[str, Any]]:
+    """Return validation metrics independently for each theoretical P surface."""
+    X = np.asarray(X, dtype=np.float64)
+    y_true = np.asarray(y_true, dtype=np.float64)
+    y_pred = np.asarray(y_pred, dtype=np.float64)
+    if len(X) != len(y_true) or len(y_true) != len(y_pred):
+        raise ValueError("Predictors, reference response and predictions must have equal lengths")
+    rows: list[dict[str, Any]] = []
+    for P in sorted(set(float(value) for value in X[:, 0])):
+        mask = X[:, 0] == P
+        rows.append({"P": P, **metric_summary(y_true[mask], y_pred[mask])})
+    return rows
+
+
 def parity_summary(left: np.ndarray, right: np.ndarray) -> dict[str, float | int]:
     left = np.asarray(left, dtype=np.float64)
     right = np.asarray(right, dtype=np.float64)
@@ -348,8 +366,37 @@ def create_surface_points(
     return np.vstack(blocks), np.concatenate(concentrations), porosities, np.asarray([a_axis, c_axis])
 
 
+def _validate_niihara_reference(
+    X: np.ndarray,
+    y: np.ndarray,
+    *,
+    source: str,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Validate an external theoretical reference without changing row order."""
+    X = np.asarray(X, dtype=np.float64)
+    y = np.asarray(y, dtype=np.float64)
+    if X.ndim != 2 or X.shape[1] != 3:
+        raise ValueError(f"{source} predictors must have shape (n, 3), got {X.shape}")
+    if y.ndim != 1:
+        raise ValueError(f"{source} response must be one-dimensional, got {y.shape}")
+    if len(X) == 0:
+        raise ValueError(f"{source} dataset is empty")
+    if len(X) != len(y):
+        raise ValueError(
+            f"{source} predictors and response have different row counts: {len(X)} and {len(y)}"
+        )
+    values = np.column_stack([X, y])
+    if not np.all(np.isfinite(values)):
+        raise ValueError(f"{source} dataset contains non-finite values")
+    if np.any(values[:, 1:] <= 0.0):
+        raise ValueError(f"{source} a, c and KIC values must be positive")
+    if len(np.unique(X, axis=0)) != len(X):
+        raise ValueError(f"{source} predictor rows must be unique")
+    return X, y
+
+
 def load_niihara_reference(path: Path) -> tuple[np.ndarray, np.ndarray]:
-    """Load an external Niihara test set with columns P, a, c and KIC."""
+    """Load an external theoretical reference CSV with columns P, a, c and KIC."""
     with path.open("r", encoding="utf-8-sig", newline="") as handle:
         reader = csv.DictReader(handle)
         required = {"P", "a", "c", "KIC"}
@@ -360,14 +407,90 @@ def load_niihara_reference(path: Path) -> tuple[np.ndarray, np.ndarray]:
             [float(row["P"]), float(row["a"]), float(row["c"]), float(row["KIC"])]
             for row in reader
         ]
-    if not rows:
-        raise ValueError("Niihara reference dataset is empty")
     values = np.asarray(rows, dtype=np.float64)
-    if not np.all(np.isfinite(values)):
-        raise ValueError("Niihara reference dataset contains non-finite values")
-    if np.any(values[:, 1:] <= 0.0):
-        raise ValueError("Niihara reference a, c and KIC values must be positive")
-    return values[:, :3], values[:, 3]
+    if values.size == 0:
+        X = np.empty((0, 3), dtype=np.float64)
+        y = np.empty(0, dtype=np.float64)
+    else:
+        X = values[:, :3]
+        y = values[:, 3]
+    return _validate_niihara_reference(X, y, source="Niihara CSV reference")
+
+
+def _xlsx_records(path: Path) -> tuple[list[str], list[tuple[Any, ...]]]:
+    """Read the active worksheet as a header and data rows using openpyxl."""
+    try:
+        from openpyxl import load_workbook
+    except ImportError as error:
+        raise RuntimeError(
+            "Reading the theoretical Excel workbooks requires openpyxl; "
+            "install experiments/fracture_toughness/requirements.txt"
+        ) from error
+
+    workbook = load_workbook(path, read_only=True, data_only=True)
+    try:
+        worksheet = workbook.active
+        iterator = worksheet.iter_rows(values_only=True)
+        try:
+            raw_header = next(iterator)
+        except StopIteration as error:
+            raise ValueError(f"Excel workbook is empty: {path}") from error
+        header = [str(value).strip() if value is not None else "" for value in raw_header]
+        rows = [tuple(row) for row in iterator if any(value is not None for value in row)]
+    finally:
+        workbook.close()
+    return header, rows
+
+
+def load_niihara_workbooks(
+    predictors_path: Path,
+    response_path: Path,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Load aligned theoretical predictors and Kc response from two Excel books."""
+    predictor_header, predictor_rows = _xlsx_records(predictors_path)
+    response_header, response_rows = _xlsx_records(response_path)
+
+    predictor_columns = {name: index for index, name in enumerate(predictor_header)}
+    missing_predictors = {"P", "a", "c"}.difference(predictor_columns)
+    if missing_predictors:
+        raise ValueError(
+            f"Theoretical predictors workbook is missing columns: {sorted(missing_predictors)}"
+        )
+    response_columns = {name.casefold(): index for index, name in enumerate(response_header)}
+    response_index = response_columns.get("kc", response_columns.get("kic"))
+    if response_index is None:
+        raise ValueError("Theoretical response workbook is missing the Kc or KIC column")
+    if len(predictor_rows) != len(response_rows):
+        raise ValueError(
+            "Theoretical predictors and response workbooks have different row counts: "
+            f"{len(predictor_rows)} and {len(response_rows)}"
+        )
+
+    X = np.asarray(
+        [
+            [
+                float(row[predictor_columns["P"]]),
+                float(row[predictor_columns["a"]]),
+                float(row[predictor_columns["c"]]),
+            ]
+            for row in predictor_rows
+        ],
+        dtype=np.float64,
+    )
+    y = np.asarray([float(row[response_index]) for row in response_rows], dtype=np.float64)
+
+    ratio_index = predictor_columns.get("c/a")
+    if ratio_index is not None:
+        supplied_ratio = np.asarray(
+            [float(row[ratio_index]) for row in predictor_rows], dtype=np.float64
+        )
+        calculated_ratio = X[:, 2] / X[:, 1]
+        if not np.all(np.isfinite(supplied_ratio)) or not np.allclose(
+            supplied_ratio, calculated_ratio, rtol=1e-10, atol=1e-12
+        ):
+            raise ValueError("Theoretical predictors contain inconsistent c/a values")
+
+    return _validate_niihara_reference(X, y, source="theoretical Excel reference")
 
 
 def porosity_axis(records: Sequence[Observation], step: float = P_SWEEP_STEP) -> np.ndarray:
@@ -490,6 +613,86 @@ def save_porosity_sweep_plot(results_dir: Path, rows: Sequence[dict[str, float]]
     return name
 
 
+def save_niihara_validation_plots(
+    results_dir: Path,
+    X: np.ndarray,
+    y_reference: np.ndarray,
+    y_predicted: np.ndarray,
+) -> list[str]:
+    """Save parity and absolute-error maps for the external theoretical surfaces."""
+    try:
+        import matplotlib
+
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+    except ImportError:
+        return []
+
+    X = np.asarray(X, dtype=np.float64)
+    y_reference = np.asarray(y_reference, dtype=np.float64)
+    y_predicted = np.asarray(y_predicted, dtype=np.float64)
+    residual = y_predicted - y_reference
+    written: list[str] = []
+
+    fig, axis = plt.subplots(figsize=(7, 6))
+    for P in sorted(set(float(value) for value in X[:, 0])):
+        mask = X[:, 0] == P
+        axis.scatter(
+            y_reference[mask],
+            y_predicted[mask],
+            s=8,
+            alpha=0.28,
+            label=f"P={P:g}",
+        )
+    lower = float(min(np.min(y_reference), np.min(y_predicted)))
+    upper = float(max(np.max(y_reference), np.max(y_predicted)))
+    axis.plot([lower, upper], [lower, upper], color="black", linewidth=1.2, linestyle="--")
+    axis.set_xlabel("Theoretical KIC (MPa*m^0.5)")
+    axis.set_ylabel("OpenFLL KIC (MPa*m^0.5)")
+    axis.set_title("OpenFLL prediction against theoretical reference")
+    axis.grid(alpha=0.2)
+    axis.legend()
+    fig.tight_layout()
+    parity_name = "niihara_reference_parity.png"
+    fig.savefig(results_dir / parity_name, dpi=170)
+    plt.close(fig)
+    written.append(parity_name)
+
+    porosity_values = sorted(set(float(value) for value in X[:, 0]))
+    fig, axes = plt.subplots(1, len(porosity_values), figsize=(6 * len(porosity_values), 5), squeeze=False)
+    maximum_error = float(np.max(np.abs(residual)))
+    color_plot = None
+    for axis, P in zip(axes[0], porosity_values):
+        mask = X[:, 0] == P
+        a_values = np.unique(X[mask, 1])
+        c_values = np.unique(X[mask, 2])
+        error_grid = np.full((len(c_values), len(a_values)), np.nan, dtype=np.float64)
+        a_indices = np.searchsorted(a_values, X[mask, 1])
+        c_indices = np.searchsorted(c_values, X[mask, 2])
+        error_grid[c_indices, a_indices] = np.abs(residual[mask])
+        color_plot = axis.pcolormesh(
+            a_values,
+            c_values,
+            error_grid,
+            shading="auto",
+            cmap="magma",
+            vmin=0.0,
+            vmax=maximum_error,
+        )
+        axis.set_xlabel("a (micrometers)")
+        axis.set_ylabel("c (micrometers)")
+        axis.set_title(f"Absolute error, P={P:g}")
+    fig.subplots_adjust(left=0.055, right=0.90, bottom=0.12, top=0.88, wspace=0.28)
+    if color_plot is not None:
+        color_axis = fig.add_axes([0.92, 0.16, 0.012, 0.68])
+        fig.colorbar(color_plot, cax=color_axis, label="Absolute KIC error")
+    error_name = "niihara_absolute_error_maps.png"
+    fig.savefig(results_dir / error_name, dpi=170)
+    plt.close(fig)
+    written.append(error_name)
+    return written
+
+
 def model_to_json(model: ModelDefinition) -> dict[str, Any]:
     return {
         "inputs": {
@@ -524,7 +727,16 @@ def run_experiment(
     grid_size: int = DEFAULT_GRID_SIZE,
     simpful_surface_sample: int = DEFAULT_SIMPFUL_SURFACE_SAMPLE,
     niihara_reference_path: Path | None = None,
+    niihara_predictors_path: Path | None = None,
+    niihara_response_path: Path | None = None,
 ) -> dict[str, Any]:
+    if niihara_reference_path is not None and (
+        niihara_predictors_path is not None or niihara_response_path is not None
+    ):
+        raise ValueError("Use either a combined Niihara CSV or the two Excel workbooks, not both")
+    if (niihara_predictors_path is None) != (niihara_response_path is None):
+        raise ValueError("Both theoretical predictors and response workbooks must be supplied")
+
     results_dir.mkdir(parents=True, exist_ok=True)
     records = load_observations(data_path)
     model = build_model_definition(records)
@@ -552,34 +764,94 @@ def run_experiment(
     timings["simpful_seconds"] = time.perf_counter() - t0
 
     niihara_validation: dict[str, Any]
-    if niihara_reference_path is None:
+    niihara_validation_plots: list[str] = []
+    if niihara_reference_path is None and niihara_predictors_path is None:
         niihara_validation = {
             "status": "not_run_missing_external_reference",
-            "required_columns": ["P", "a", "c", "KIC"],
+            "accepted_inputs": {
+                "combined_csv_columns": ["P", "a", "c", "KIC"],
+                "excel_predictor_columns": ["P", "a", "c", "c/a (optional check)"],
+                "excel_response_columns": ["Kc or KIC"],
+            },
             "reason": (
-                "The supplied files do not contain the Niihara model-data array or the physical "
-                "parameters required to reconstruct it independently."
+                "No external theoretical reference was supplied. The 26 experimental records "
+                "remain the training data and are not reused as an external test."
             ),
         }
     else:
         t0 = time.perf_counter()
-        niihara_X, niihara_y = load_niihara_reference(niihara_reference_path)
+        if niihara_reference_path is not None:
+            niihara_X, niihara_y = load_niihara_reference(niihara_reference_path)
+            reference_source: dict[str, Any] = {
+                "format": "combined_csv",
+                "path": str(niihara_reference_path),
+            }
+        else:
+            assert niihara_predictors_path is not None
+            assert niihara_response_path is not None
+            niihara_X, niihara_y = load_niihara_workbooks(
+                niihara_predictors_path,
+                niihara_response_path,
+            )
+            reference_source = {
+                "format": "paired_xlsx",
+                "predictors_path": str(niihara_predictors_path),
+                "response_path": str(niihara_response_path),
+            }
         niihara_predictions = predict_openfll(openfll_engine, niihara_X)
+        niihara_numpy_predictions = predict_numpy(model, niihara_X)
+        metrics_by_porosity = metric_summary_by_porosity(
+            niihara_X, niihara_y, niihara_predictions
+        )
         timings["niihara_reference_seconds"] = time.perf_counter() - t0
         niihara_validation = {
             "status": "completed_external_reference",
-            "path": str(niihara_reference_path),
+            "role": "full theoretical reference; excluded from training and rule construction",
+            "source": reference_source,
             "records": int(len(niihara_y)),
+            "porosity_values": sorted(set(float(value) for value in niihara_X[:, 0])),
+            "theoretical_KIC_range": {
+                "min": float(np.min(niihara_y)),
+                "max": float(np.max(niihara_y)),
+            },
+            "predicted_KIC_range": {
+                "min": float(np.min(niihara_predictions)),
+                "max": float(np.max(niihara_predictions)),
+            },
             "metrics": metric_summary(niihara_y, niihara_predictions),
+            "metrics_by_porosity": metrics_by_porosity,
+            "implementation_parity_openfll_vs_numpy": parity_summary(
+                niihara_predictions, niihara_numpy_predictions
+            ),
         }
         write_csv(
             results_dir / "niihara_reference_predictions.csv",
-            ["P", "a", "c", "KIC_niihara_reference", "KIC_openfll", "abs_error"],
+            [
+                "P", "a", "c", "KIC_theoretical_reference", "KIC_openfll",
+                "residual_openfll_minus_reference", "abs_error",
+            ],
             (
-                [*niihara_X[index], niihara_y[index], niihara_predictions[index],
-                 abs(niihara_y[index] - niihara_predictions[index])]
+                [
+                    *niihara_X[index], niihara_y[index], niihara_predictions[index],
+                    niihara_predictions[index] - niihara_y[index],
+                    abs(niihara_y[index] - niihara_predictions[index]),
+                ]
                 for index in range(len(niihara_y))
             ),
+        )
+        write_csv(
+            results_dir / "niihara_metrics_by_porosity.csv",
+            ["P", "n", "mse", "rmse", "mae", "max_abs_error", "r2"],
+            (
+                [
+                    row["P"], row["n"], row["mse"], row["rmse"], row["mae"],
+                    row["max_abs_error"], row["r2"],
+                ]
+                for row in metrics_by_porosity
+            ),
+        )
+        niihara_validation_plots = save_niihara_validation_plots(
+            results_dir, niihara_X, niihara_y, niihara_predictions
         )
 
     t0 = time.perf_counter()
@@ -639,6 +911,7 @@ def run_experiment(
     )
 
     plots = save_plots(results_dir, surface_X, concentrations, openfll_surface, grid_size)
+    plots.extend(niihara_validation_plots)
     sweep_plot = save_porosity_sweep_plot(results_dir, sweep_rows)
     if sweep_plot is not None:
         plots.append(sweep_plot)
@@ -717,8 +990,8 @@ def run_experiment(
             "The supplied article does not include the optimized Gaussian centers and sigmas.",
             "This run uses deterministic neighbor-based initial widths, not the article's genetic optimization.",
             "All 26 experimental records are training data; training metrics are not reported as test accuracy.",
-            "The supplied files do not include the Niihara model-data array or all physical parameters required to reproduce it independently.",
-            "External Niihara validation is supported through --niihara-reference and is not replaced by calibration on the training records.",
+            "The theoretical reference is evaluated only after model construction and is never used to fit rules, membership functions or consequents.",
+            "The external theoretical values validate agreement with the supplied analytical surface; they are not additional physical experiments.",
             "Intermediate-concentration surfaces are model predictions and have no independent experimental ground truth.",
             "Simpful surface parity uses a deterministic stratified sample because its rule evaluation is scalar and much slower than OpenFLL batch inference.",
         ],
@@ -745,17 +1018,37 @@ def main() -> None:
         default=None,
         help="Optional external CSV test set with columns P,a,c,KIC",
     )
+    parser.add_argument(
+        "--niihara-predictors-xlsx",
+        type=Path,
+        default=None,
+        help="Optional theoretical predictors workbook with columns a,c,P and optional c/a",
+    )
+    parser.add_argument(
+        "--niihara-response-xlsx",
+        type=Path,
+        default=None,
+        help="Optional theoretical response workbook with column Kc or KIC",
+    )
     args = parser.parse_args()
     if args.grid_size < 2:
         parser.error("--grid-size must be at least 2")
     if args.simpful_surface_sample < 1:
         parser.error("--simpful-surface-sample must be positive")
+    if args.niihara_reference is not None and (
+        args.niihara_predictors_xlsx is not None or args.niihara_response_xlsx is not None
+    ):
+        parser.error("use either --niihara-reference or the two Excel options, not both")
+    if (args.niihara_predictors_xlsx is None) != (args.niihara_response_xlsx is None):
+        parser.error("both --niihara-predictors-xlsx and --niihara-response-xlsx are required")
     summary = run_experiment(
         args.data,
         args.results_dir,
         args.grid_size,
         args.simpful_surface_sample,
         args.niihara_reference,
+        args.niihara_predictors_xlsx,
+        args.niihara_response_xlsx,
     )
     print(json.dumps(summary, ensure_ascii=False, indent=2))
 
