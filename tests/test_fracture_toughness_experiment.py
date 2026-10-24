@@ -9,10 +9,12 @@ from experiments.fracture_toughness.run_experiment import (
     build_model_definition,
     build_openfll_engine,
     build_simpful_system,
+    concentration_to_porosity,
     create_surface_points,
-    leave_one_out_fixed_predictions,
     load_observations,
+    load_niihara_reference,
     observations_to_arrays,
+    porosity_axis,
     predict_numpy,
     predict_openfll,
     predict_simpful_from_strengths,
@@ -37,12 +39,14 @@ def test_article_cleaned_dataset_and_rule_topology():
     assert len(model.c_terms) == 26
     assert len(model.rules) == 26
     assert all(sigma > 0.0 for _, _, sigma in (*model.p_terms, *model.a_terms, *model.c_terms))
+    assert all(rule.output_value > 0.0 for rule in model.rules)
+    assert [rule.output_value for rule in model.rules] == [record.KIC for record in records]
 
 
 def test_openfll_matches_independent_numpy_oracle_on_training_and_surface():
     records, model = _model_data()
     X_train, _ = observations_to_arrays(records)
-    surface_X, _, _ = create_surface_points(records, grid_size=20)
+    surface_X, _, _, _ = create_surface_points(records, grid_size=20)
     X = np.vstack([X_train, surface_X])
     engine = build_openfll_engine(model)
     actual = predict_openfll(engine, X)
@@ -60,21 +64,34 @@ def test_fixed_article_model_reproduces_reference_training_mse():
     assert mse == pytest.approx(0.0034064026864190082, rel=1e-12, abs=1e-15)
 
 
-def test_leave_one_out_predictions_are_finite_and_nontrivial():
+def test_intermediate_concentrations_map_inside_measured_porosity_range():
     records, _ = _model_data()
-    _, y_train = observations_to_arrays(records)
-    predictions = leave_one_out_fixed_predictions(records)
-    mse = float(np.mean((predictions - y_train) ** 2))
-    assert predictions.shape == y_train.shape
-    assert np.all(np.isfinite(predictions))
-    assert mse == pytest.approx(0.01665686202785139, rel=1e-12, abs=1e-15)
+    concentrations = np.asarray([0.0, 0.1, 0.2, 0.3, 0.4, 0.5])
+    porosity = concentration_to_porosity(records, concentrations)
+    assert porosity[[0, 1, 5]].tolist() == pytest.approx([27.3715, 23.01, 7.96274])
+    assert np.all(np.diff(porosity) < 0.0)
+    sweep = porosity_axis(records)
+    assert sweep[0] == pytest.approx(7.96274)
+    assert sweep[-1] == pytest.approx(27.3715)
+
+
+def test_external_niihara_reference_loader(tmp_path):
+    reference_path = tmp_path / "niihara.csv"
+    reference_path.write_text(
+        "P,a,c,KIC\n27.3715,14.0,48.0,0.75\n7.96274,39.0,109.0,1.64\n",
+        encoding="utf-8",
+    )
+    X, y = load_niihara_reference(reference_path)
+    assert X.shape == (2, 3)
+    assert y.tolist() == pytest.approx([0.75, 1.64])
+    assert np.all(np.isfinite(X))
 
 
 def test_simpful_matches_openfll_and_its_scalar_sugeno_inference():
     pytest.importorskip("simpful")
     records, model = _model_data()
     X_train, _ = observations_to_arrays(records)
-    surface_X, _, _ = create_surface_points(records, grid_size=6)
+    surface_X, _, _, _ = create_surface_points(records, grid_size=6)
     X = np.vstack([X_train, surface_X])
     engine = build_openfll_engine(model)
     system = build_simpful_system(model)

@@ -1,9 +1,11 @@
 """Reproduce and validate the fracture-toughness fuzzy surface.
 
-The model is a zero-order Takagi-Sugeno system with one rule per cleaned
-experimental observation. OpenFLL predictions are compared with Simpful and an
-independent vectorized NumPy implementation of the same weighted-average
-formula.
+All 26 cleaned experimental observations are used as the training set. Each
+observation defines one zero-order Takagi-Sugeno rule whose consequent is the
+observed positive KIC value; consequents are not refitted. The model predicts
+surfaces at measured and intermediate porosity values. OpenFLL predictions are
+compared with Simpful and an independent NumPy oracle. If a separately supplied
+Niihara reference dataset is available, it is evaluated as an external test set.
 """
 from __future__ import annotations
 
@@ -27,6 +29,8 @@ DEFAULT_GRID_SIZE = 100
 DEFAULT_SIMPFUL_SURFACE_SAMPLE = 300
 ARTICLE_A_RANGE = (14.0, 39.0)
 ARTICLE_C_RANGE = (48.0, 109.0)
+P_SWEEP_STEP = 0.1
+TARGET_CONCENTRATIONS = (0.0, 0.1, 0.2, 0.3, 0.4, 0.5)
 
 
 @dataclass(frozen=True)
@@ -267,30 +271,6 @@ def predict_simpful_scalar(system: Any, X: np.ndarray) -> np.ndarray:
     return np.asarray(values, dtype=np.float64)
 
 
-def build_regressor(model: ModelDefinition) -> Any:
-    from openfll.sklearn import SugenoModelSpec, SugenoRegressor
-
-    spec = SugenoModelSpec(
-        inputs={
-            "P": [(name, "gaussian", [center, sigma]) for name, center, sigma in model.p_terms],
-            "a": [(name, "gaussian", [center, sigma]) for name, center, sigma in model.a_terms],
-            "c": [(name, "gaussian", [center, sigma]) for name, center, sigma in model.c_terms],
-        },
-        rules=[
-            {
-                "antecedent": [("P", rule.p_term), ("a", rule.a_term), ("c", rule.c_term)],
-                "consequent": [(OUTPUT_NAME, rule.output_term)],
-                "t_norm": "prod_and",
-            }
-            for rule in model.rules
-        ],
-        output_name=OUTPUT_NAME,
-        consequents=[rule.output_term for rule in model.rules],
-        default_t_norm="prod_and",
-    )
-    return SugenoRegressor(model_spec=spec, solver="lstsq", alpha=0.0)
-
-
 def metric_summary(y_true: np.ndarray, y_pred: np.ndarray) -> dict[str, float | int]:
     y_true = np.asarray(y_true, dtype=np.float64)
     y_pred = np.asarray(y_pred, dtype=np.float64)
@@ -312,18 +292,6 @@ def metric_summary(y_true: np.ndarray, y_pred: np.ndarray) -> dict[str, float | 
     }
 
 
-def leave_one_out_fixed_predictions(records: Sequence[Observation]) -> np.ndarray:
-    """Predict every observation from a model rebuilt without its own rule."""
-    predictions: list[float] = []
-    for index, item in enumerate(records):
-        retained = list(records[:index]) + list(records[index + 1 :])
-        model = build_model_definition(retained)
-        engine = build_openfll_engine(model)
-        point = np.asarray([[item.P, item.a, item.c]], dtype=np.float64)
-        predictions.append(float(predict_openfll(engine, point)[0]))
-    return np.asarray(predictions, dtype=np.float64)
-
-
 def parity_summary(left: np.ndarray, right: np.ndarray) -> dict[str, float | int]:
     left = np.asarray(left, dtype=np.float64)
     right = np.asarray(right, dtype=np.float64)
@@ -339,17 +307,108 @@ def parity_summary(left: np.ndarray, right: np.ndarray) -> dict[str, float | int
     }
 
 
-def create_surface_points(records: Sequence[Observation], grid_size: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+def article_grid(grid_size: int) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     a_axis = np.linspace(*ARTICLE_A_RANGE, grid_size, dtype=np.float64)
     c_axis = np.linspace(*ARTICLE_C_RANGE, grid_size, dtype=np.float64)
     a_grid, c_grid = np.meshgrid(a_axis, c_axis, indexing="xy")
+    return a_axis, c_axis, a_grid, c_grid
+
+
+def concentration_to_porosity(
+    records: Sequence[Observation], concentrations: Sequence[float] | np.ndarray
+) -> np.ndarray:
+    """Map concentration to porosity by piecewise-linear interpolation.
+
+    The three measured pairs are preserved exactly. Intermediate concentrations
+    are predictions inside the measured 0.0--0.5 mass-percent interval, not new
+    experimental observations.
+    """
+    pairs = sorted({(item.concentration_mass_pct, item.P) for item in records})
+    measured_concentrations = np.asarray([item[0] for item in pairs], dtype=np.float64)
+    measured_porosity = np.asarray([item[1] for item in pairs], dtype=np.float64)
+    requested = np.asarray(concentrations, dtype=np.float64)
+    if np.any(requested < measured_concentrations[0]) or np.any(requested > measured_concentrations[-1]):
+        raise ValueError("Concentration interpolation is restricted to the measured interval")
+    return np.interp(requested, measured_concentrations, measured_porosity)
+
+
+def create_surface_points(
+    records: Sequence[Observation],
+    grid_size: int,
+    target_concentrations: Sequence[float] = TARGET_CONCENTRATIONS,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    a_axis, c_axis, a_grid, c_grid = article_grid(grid_size)
+    requested_concentrations = np.asarray(target_concentrations, dtype=np.float64)
+    porosities = concentration_to_porosity(records, requested_concentrations)
     blocks = []
     concentrations = []
-    for P in sorted({item.P for item in records}, reverse=True):
-        concentration = next(item.concentration_mass_pct for item in records if item.P == P)
+    for concentration, P in zip(requested_concentrations, porosities):
         blocks.append(np.column_stack([np.full(a_grid.size, P), a_grid.ravel(), c_grid.ravel()]))
         concentrations.append(np.full(a_grid.size, concentration))
-    return np.vstack(blocks), np.concatenate(concentrations), np.asarray([a_axis, c_axis])
+    return np.vstack(blocks), np.concatenate(concentrations), porosities, np.asarray([a_axis, c_axis])
+
+
+def load_niihara_reference(path: Path) -> tuple[np.ndarray, np.ndarray]:
+    """Load an external Niihara test set with columns P, a, c and KIC."""
+    with path.open("r", encoding="utf-8-sig", newline="") as handle:
+        reader = csv.DictReader(handle)
+        required = {"P", "a", "c", "KIC"}
+        missing = required.difference(reader.fieldnames or [])
+        if missing:
+            raise ValueError(f"Niihara reference is missing columns: {sorted(missing)}")
+        rows = [
+            [float(row["P"]), float(row["a"]), float(row["c"]), float(row["KIC"])]
+            for row in reader
+        ]
+    if not rows:
+        raise ValueError("Niihara reference dataset is empty")
+    values = np.asarray(rows, dtype=np.float64)
+    if not np.all(np.isfinite(values)):
+        raise ValueError("Niihara reference dataset contains non-finite values")
+    if np.any(values[:, 1:] <= 0.0):
+        raise ValueError("Niihara reference a, c and KIC values must be positive")
+    return values[:, :3], values[:, 3]
+
+
+def porosity_axis(records: Sequence[Observation], step: float = P_SWEEP_STEP) -> np.ndarray:
+    if step <= 0.0:
+        raise ValueError("Porosity step must be positive")
+    minimum = min(item.P for item in records)
+    maximum = max(item.P for item in records)
+    values = minimum + np.arange(math.floor((maximum - minimum) / step) + 1, dtype=np.float64) * step
+    if not math.isclose(float(values[-1]), maximum, rel_tol=0.0, abs_tol=1e-12):
+        values = np.append(values, maximum)
+    return values
+
+
+def calculate_porosity_sweep(
+    openfll_engine: Any,
+    model: ModelDefinition,
+    records: Sequence[Observation],
+    grid_size: int,
+    step: float = P_SWEEP_STEP,
+) -> tuple[list[dict[str, float]], float]:
+    """Calculate integral surface statistics for measured and unmeasured P."""
+    _, _, a_grid, c_grid = article_grid(grid_size)
+    rows: list[dict[str, float]] = []
+    maximum_parity_difference = 0.0
+    for P in porosity_axis(records, step):
+        points = np.column_stack([np.full(a_grid.size, P), a_grid.ravel(), c_grid.ravel()])
+        openfll_values = predict_openfll(openfll_engine, points)
+        numpy_values = predict_numpy(model, points)
+        maximum_parity_difference = max(
+            maximum_parity_difference, float(np.max(np.abs(openfll_values - numpy_values)))
+        )
+        rows.append(
+            {
+                "P": float(P),
+                "mean": float(np.mean(openfll_values)),
+                "std": float(np.std(openfll_values)),
+                "min": float(np.min(openfll_values)),
+                "max": float(np.max(openfll_values)),
+            }
+        )
+    return rows, maximum_parity_difference
 
 
 def write_csv(path: Path, header: Sequence[str], rows: Iterable[Sequence[Any]]) -> None:
@@ -364,7 +423,6 @@ def save_plots(
     surface_X: np.ndarray,
     concentrations: np.ndarray,
     openfll_values: np.ndarray,
-    numpy_values: np.ndarray,
     grid_size: int,
 ) -> list[str]:
     try:
@@ -382,7 +440,7 @@ def save_plots(
         a_grid = surface_X[mask, 1].reshape(grid_size, grid_size)
         c_grid = surface_X[mask, 2].reshape(grid_size, grid_size)
         z_openfll = openfll_values[mask].reshape(grid_size, grid_size)
-        z_diff = np.abs(openfll_values[mask] - numpy_values[mask]).reshape(grid_size, grid_size)
+        P = float(surface_X[mask, 0][0])
 
         fig = plt.figure(figsize=(8, 6))
         axis = fig.add_subplot(111, projection="3d")
@@ -390,32 +448,46 @@ def save_plots(
         axis.set_xlabel("a (micrometers)")
         axis.set_ylabel("c (micrometers)")
         axis.set_zlabel("KIC (MPa*m^0.5)")
-        axis.set_title(f"OpenFLL fuzzy surface, MWCNT={concentration:.1f} mass.%")
+        measured = concentration in {0.0, 0.1, 0.5}
+        status = "measured" if measured else "intermediate prediction"
+        axis.set_title(
+            f"OpenFLL fuzzy surface, MWCNT={concentration:.1f} mass.%\n"
+            f"P={P:.5f} ({status})"
+        )
         fig.colorbar(surface, ax=axis, shrink=0.65, pad=0.12)
         fig.tight_layout()
         surface_name = f"surface_openfll_{concentration:.1f}.png"
         fig.savefig(results_dir / surface_name, dpi=160)
         plt.close(fig)
         written.append(surface_name)
-
-        fig, axis = plt.subplots(figsize=(7, 5))
-        image = axis.imshow(
-            z_diff,
-            origin="lower",
-            extent=[ARTICLE_A_RANGE[0], ARTICLE_A_RANGE[1], ARTICLE_C_RANGE[0], ARTICLE_C_RANGE[1]],
-            aspect="auto",
-            cmap="magma",
-        )
-        axis.set_xlabel("a (micrometers)")
-        axis.set_ylabel("c (micrometers)")
-        axis.set_title(f"|OpenFLL - NumPy oracle|, MWCNT={concentration:.1f} mass.%")
-        fig.colorbar(image, ax=axis, label="absolute difference")
-        fig.tight_layout()
-        difference_name = f"difference_openfll_numpy_{concentration:.1f}.png"
-        fig.savefig(results_dir / difference_name, dpi=160)
-        plt.close(fig)
-        written.append(difference_name)
     return written
+
+
+def save_porosity_sweep_plot(results_dir: Path, rows: Sequence[dict[str, float]]) -> str | None:
+    try:
+        import matplotlib
+
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+    except ImportError:
+        return None
+
+    P = np.asarray([row["P"] for row in rows], dtype=np.float64)
+    mean = np.asarray([row["mean"] for row in rows], dtype=np.float64)
+    std = np.asarray([row["std"] for row in rows], dtype=np.float64)
+    fig, axis = plt.subplots(figsize=(8, 5))
+    axis.plot(P, mean, color="#1f77b4", linewidth=2, label="surface mean")
+    axis.fill_between(P, mean - std, mean + std, color="#1f77b4", alpha=0.2, label="mean ± 1 std")
+    axis.set_xlabel("Porosity P")
+    axis.set_ylabel("KIC (MPa*m^0.5)")
+    axis.set_title("Predicted integral fracture toughness across porosity")
+    axis.grid(alpha=0.25)
+    axis.legend()
+    fig.tight_layout()
+    name = "mean_kic_vs_porosity.png"
+    fig.savefig(results_dir / name, dpi=160)
+    plt.close(fig)
+    return name
 
 
 def model_to_json(model: ModelDefinition) -> dict[str, Any]:
@@ -451,12 +523,13 @@ def run_experiment(
     results_dir: Path,
     grid_size: int = DEFAULT_GRID_SIZE,
     simpful_surface_sample: int = DEFAULT_SIMPFUL_SURFACE_SAMPLE,
+    niihara_reference_path: Path | None = None,
 ) -> dict[str, Any]:
     results_dir.mkdir(parents=True, exist_ok=True)
     records = load_observations(data_path)
     model = build_model_definition(records)
     X_train, y_train = observations_to_arrays(records)
-    surface_X, concentrations, _ = create_surface_points(records, grid_size)
+    surface_X, concentrations, surface_porosity, _ = create_surface_points(records, grid_size)
 
     timings: dict[str, float] = {}
     t0 = time.perf_counter()
@@ -478,28 +551,54 @@ def run_experiment(
     simpful_scalar_check = predict_simpful_scalar(simpful_system, X_train[:5])
     timings["simpful_seconds"] = time.perf_counter() - t0
 
-    t0 = time.perf_counter()
-    regressor = build_regressor(model)
-    regressor.fit(X_train, y_train)
-    regressor_train = np.asarray(regressor.predict(X_train), dtype=np.float64)
-    regressor_surface = np.asarray(regressor.predict(surface_X), dtype=np.float64)
-    timings["sugeno_regressor_seconds"] = time.perf_counter() - t0
+    niihara_validation: dict[str, Any]
+    if niihara_reference_path is None:
+        niihara_validation = {
+            "status": "not_run_missing_external_reference",
+            "required_columns": ["P", "a", "c", "KIC"],
+            "reason": (
+                "The supplied files do not contain the Niihara model-data array or the physical "
+                "parameters required to reconstruct it independently."
+            ),
+        }
+    else:
+        t0 = time.perf_counter()
+        niihara_X, niihara_y = load_niihara_reference(niihara_reference_path)
+        niihara_predictions = predict_openfll(openfll_engine, niihara_X)
+        timings["niihara_reference_seconds"] = time.perf_counter() - t0
+        niihara_validation = {
+            "status": "completed_external_reference",
+            "path": str(niihara_reference_path),
+            "records": int(len(niihara_y)),
+            "metrics": metric_summary(niihara_y, niihara_predictions),
+        }
+        write_csv(
+            results_dir / "niihara_reference_predictions.csv",
+            ["P", "a", "c", "KIC_niihara_reference", "KIC_openfll", "abs_error"],
+            (
+                [*niihara_X[index], niihara_y[index], niihara_predictions[index],
+                 abs(niihara_y[index] - niihara_predictions[index])]
+                for index in range(len(niihara_y))
+            ),
+        )
 
     t0 = time.perf_counter()
-    leave_one_out_predictions = leave_one_out_fixed_predictions(records)
-    timings["fixed_model_leave_one_out_seconds"] = time.perf_counter() - t0
+    sweep_rows, sweep_openfll_numpy_max_abs_diff = calculate_porosity_sweep(
+        openfll_engine, model, records, grid_size
+    )
+    timings["porosity_sweep_seconds"] = time.perf_counter() - t0
 
     write_csv(
         results_dir / "training_predictions.csv",
         [
             "record_id", "concentration_mass_pct", "P", "a", "c", "KIC_observed",
-            "KIC_openfll_fixed", "KIC_simpful_fixed", "KIC_numpy_fixed", "KIC_openfll_fitted",
+            "KIC_openfll_fixed", "KIC_simpful_fixed", "KIC_numpy_fixed",
             "abs_openfll_simpful", "abs_openfll_numpy",
         ],
         (
             [
                 item.record_id, item.concentration_mass_pct, item.P, item.a, item.c, item.KIC,
-                openfll_train[index], simpful_train[index], numpy_train[index], regressor_train[index],
+                openfll_train[index], simpful_train[index], numpy_train[index],
                 abs(openfll_train[index] - simpful_train[index]),
                 abs(openfll_train[index] - numpy_train[index]),
             ]
@@ -510,13 +609,14 @@ def run_experiment(
         results_dir / "surface_predictions.csv",
         [
             "concentration_mass_pct", "P", "a", "c", "KIC_openfll_fixed",
-            "KIC_numpy_fixed", "KIC_openfll_fitted", "abs_openfll_numpy",
+            "KIC_numpy_fixed", "abs_openfll_numpy", "porosity_status",
         ],
         (
             [
                 concentrations[index], *surface_X[index], openfll_surface[index],
-                numpy_surface[index], regressor_surface[index],
+                numpy_surface[index],
                 abs(openfll_surface[index] - numpy_surface[index]),
+                "measured" if concentrations[index] in {0.0, 0.1, 0.5} else "intermediate_prediction",
             ]
             for index in range(len(surface_X))
         ),
@@ -533,20 +633,19 @@ def run_experiment(
         ),
     )
     write_csv(
-        results_dir / "leave_one_out_predictions.csv",
-        ["record_id", "concentration_mass_pct", "P", "a", "c", "KIC_observed", "KIC_predicted", "abs_error"],
-        (
-            [
-                item.record_id, item.concentration_mass_pct, item.P, item.a, item.c, item.KIC,
-                leave_one_out_predictions[index], abs(item.KIC - leave_one_out_predictions[index]),
-            ]
-            for index, item in enumerate(records)
-        ),
+        results_dir / "porosity_sweep.csv",
+        ["P", "KIC_mean", "KIC_std", "KIC_min", "KIC_max"],
+        ([row["P"], row["mean"], row["std"], row["min"], row["max"]] for row in sweep_rows),
     )
 
-    plots = save_plots(results_dir, surface_X, concentrations, openfll_surface, numpy_surface, grid_size)
+    plots = save_plots(results_dir, surface_X, concentrations, openfll_surface, grid_size)
+    sweep_plot = save_porosity_sweep_plot(results_dir, sweep_rows)
+    if sweep_plot is not None:
+        plots.append(sweep_plot)
     surface_statistics = {
         f"{concentration:.1f}": {
+            "P": float(surface_X[concentrations == concentration, 0][0]),
+            "status": "measured" if concentration in {0.0, 0.1, 0.5} else "intermediate_prediction",
             "mean": float(np.mean(openfll_surface[concentrations == concentration])),
             "std": float(np.std(openfll_surface[concentrations == concentration])),
             "min": float(np.min(openfll_surface[concentrations == concentration])),
@@ -554,6 +653,7 @@ def run_experiment(
         }
         for concentration in sorted(set(float(value) for value in concentrations))
     }
+    consequent_values = np.asarray([rule.output_value for rule in model.rules], dtype=np.float64)
     summary: dict[str, Any] = {
         "environment": {
             "python": sys.version,
@@ -574,41 +674,52 @@ def run_experiment(
             "c_terms": len(model.c_terms),
             "grid_size_per_surface": grid_size,
             "surface_points_total": len(surface_X),
+            "surface_concentrations": [float(value) for value in TARGET_CONCENTRATIONS],
+            "surface_porosity": [float(value) for value in surface_porosity],
+            "porosity_sweep_step": P_SWEEP_STEP,
+            "porosity_sweep_levels": len(sweep_rows),
             "simpful_surface_sample_points": int(len(simpful_indices)),
         },
-        "fixed_model_training_metrics": metric_summary(y_train, openfll_train),
-        "fixed_model_leave_one_out_metrics": metric_summary(y_train, leave_one_out_predictions),
-        "fitted_regressor_training_metrics": metric_summary(y_train, regressor_train),
-        "fitted_regressor": {
-            "rank": int(regressor.rank_),
-            "coefficient_count": int(len(regressor.coef_)),
-            "coefficient_min": float(np.min(regressor.coef_)),
-            "coefficient_max": float(np.max(regressor.coef_)),
+        "consequents": {
+            "source": "observed KIC values from all 26 training records; no consequent fitting",
+            "count": int(len(consequent_values)),
+            "min": float(np.min(consequent_values)),
+            "max": float(np.max(consequent_values)),
+            "all_positive": bool(np.all(consequent_values > 0.0)),
         },
+        "fixed_model_training_metrics": metric_summary(y_train, openfll_train),
+        "niihara_validation": niihara_validation,
         "parity": {
             "training_openfll_vs_simpful": parity_summary(openfll_train, simpful_train),
             "training_openfll_vs_numpy": parity_summary(openfll_train, numpy_train),
             "surface_sample_openfll_vs_simpful": parity_summary(openfll_surface[simpful_indices], simpful_surface),
             "surface_openfll_vs_numpy": parity_summary(openfll_surface, numpy_surface),
             "simpful_scalar_vs_strengths_first_5": parity_summary(simpful_scalar_check, simpful_train[:5]),
+            "porosity_sweep_openfll_vs_numpy_max_abs_diff": sweep_openfll_numpy_max_abs_diff,
         },
         "surface_ranges": {
             "openfll_min": float(np.nanmin(openfll_surface)),
             "openfll_max": float(np.nanmax(openfll_surface)),
             "openfll_nonfinite": int((~np.isfinite(openfll_surface)).sum()),
             "simpful_sample_nonfinite": int((~np.isfinite(simpful_surface)).sum()),
-            "regressor_min": float(np.nanmin(regressor_surface)),
-            "regressor_max": float(np.nanmax(regressor_surface)),
-            "regressor_nonfinite": int((~np.isfinite(regressor_surface)).sum()),
         },
         "fixed_model_surface_statistics_by_concentration": surface_statistics,
+        "porosity_sweep": {
+            "P_min": float(sweep_rows[0]["P"]),
+            "P_max": float(sweep_rows[-1]["P"]),
+            "levels": len(sweep_rows),
+            "mean_KIC_min": float(min(row["mean"] for row in sweep_rows)),
+            "mean_KIC_max": float(max(row["mean"] for row in sweep_rows)),
+        },
         "timings": timings,
         "plots": plots,
         "limitations": [
             "The supplied article does not include the optimized Gaussian centers and sigmas.",
             "This run uses deterministic neighbor-based initial widths, not the article's genetic optimization.",
-            "Training metrics are in-sample reproduction metrics and do not measure unseen physical concentrations.",
-            "Leave-one-out validation holds out observations but still evaluates only the three experimentally measured porosity levels.",
+            "All 26 experimental records are training data; training metrics are not reported as test accuracy.",
+            "The supplied files do not include the Niihara model-data array or all physical parameters required to reproduce it independently.",
+            "External Niihara validation is supported through --niihara-reference and is not replaced by calibration on the training records.",
+            "Intermediate-concentration surfaces are model predictions and have no independent experimental ground truth.",
             "Simpful surface parity uses a deterministic stratified sample because its rule evaluation is scalar and much slower than OpenFLL batch inference.",
         ],
     }
@@ -628,12 +739,24 @@ def main() -> None:
     parser.add_argument("--results-dir", type=Path, default=experiment_dir / "results")
     parser.add_argument("--grid-size", type=int, default=DEFAULT_GRID_SIZE)
     parser.add_argument("--simpful-surface-sample", type=int, default=DEFAULT_SIMPFUL_SURFACE_SAMPLE)
+    parser.add_argument(
+        "--niihara-reference",
+        type=Path,
+        default=None,
+        help="Optional external CSV test set with columns P,a,c,KIC",
+    )
     args = parser.parse_args()
     if args.grid_size < 2:
         parser.error("--grid-size must be at least 2")
     if args.simpful_surface_sample < 1:
         parser.error("--simpful-surface-sample must be positive")
-    summary = run_experiment(args.data, args.results_dir, args.grid_size, args.simpful_surface_sample)
+    summary = run_experiment(
+        args.data,
+        args.results_dir,
+        args.grid_size,
+        args.simpful_surface_sample,
+        args.niihara_reference,
+    )
     print(json.dumps(summary, ensure_ascii=False, indent=2))
 
 

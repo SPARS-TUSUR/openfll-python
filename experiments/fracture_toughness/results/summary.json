@@ -25,8 +25,33 @@
     "a_terms": 26,
     "c_terms": 26,
     "grid_size_per_surface": 100,
-    "surface_points_total": 30000,
+    "surface_points_total": 60000,
+    "surface_concentrations": [
+      0.0,
+      0.1,
+      0.2,
+      0.3,
+      0.4,
+      0.5
+    ],
+    "surface_porosity": [
+      27.3715,
+      23.01,
+      19.248185,
+      15.486370000000003,
+      11.724555,
+      7.96274
+    ],
+    "porosity_sweep_step": 0.1,
+    "porosity_sweep_levels": 196,
     "simpful_surface_sample_points": 300
+  },
+  "consequents": {
+    "source": "observed KIC values from all 26 training records; no consequent fitting",
+    "count": 26,
+    "min": 0.49674,
+    "max": 1.42691,
+    "all_positive": true
   },
   "fixed_model_training_metrics": {
     "n": 26,
@@ -38,31 +63,15 @@
     "max_abs_error": 0.17775028797554226,
     "r2": 0.9443217379540166
   },
-  "fixed_model_leave_one_out_metrics": {
-    "n": 26,
-    "finite": 26,
-    "nan_or_inf": 0,
-    "mse": 0.01665686202785139,
-    "rmse": 0.12906146608438704,
-    "mae": 0.10780691411666865,
-    "max_abs_error": 0.25961296993797045,
-    "r2": 0.7277406066675407
-  },
-  "fitted_regressor_training_metrics": {
-    "n": 26,
-    "finite": 26,
-    "nan_or_inf": 0,
-    "mse": 2.549575690071275e-30,
-    "rmse": 1.5967390801478102e-15,
-    "mae": 1.2895667439876818e-15,
-    "max_abs_error": 3.9968028886505635e-15,
-    "r2": 1.0
-  },
-  "fitted_regressor": {
-    "rank": 26,
-    "coefficient_count": 26,
-    "coefficient_min": -4.6115156728654885,
-    "coefficient_max": 4.991812186920949
+  "niihara_validation": {
+    "status": "not_run_missing_external_reference",
+    "required_columns": [
+      "P",
+      "a",
+      "c",
+      "KIC"
+    ],
+    "reason": "The supplied files do not contain the Niihara model-data array or the physical parameters required to reconstruct it independently."
   },
   "parity": {
     "training_openfll_vs_simpful": {
@@ -86,16 +95,16 @@
       "finite_pairs": 300,
       "nonfinite_pairs": 0,
       "max_abs_diff": 6.661338147750939e-16,
-      "mean_abs_diff": 1.1583326890255799e-16,
-      "rmse_diff": 1.85222115515448e-16
+      "mean_abs_diff": 1.1435297153639113e-16,
+      "rmse_diff": 1.8654830511634538e-16
     },
     "surface_openfll_vs_numpy": {
-      "n": 30000,
-      "finite_pairs": 30000,
+      "n": 60000,
+      "finite_pairs": 60000,
       "nonfinite_pairs": 0,
-      "max_abs_diff": 1.9984014443252818e-15,
-      "mean_abs_diff": 1.268133746161008e-16,
-      "rmse_diff": 1.9612176932438828e-16
+      "max_abs_diff": 2.4424906541753444e-15,
+      "mean_abs_diff": 1.2998306135140561e-16,
+      "rmse_diff": 2.0290876129842194e-16
     },
     "simpful_scalar_vs_strengths_first_5": {
       "n": 5,
@@ -104,57 +113,94 @@
       "max_abs_diff": 5.551115123125783e-16,
       "mean_abs_diff": 2.220446049250313e-16,
       "rmse_diff": 3.21773202442742e-16
-    }
+    },
+    "porosity_sweep_openfll_vs_numpy_max_abs_diff": 3.4416913763379853e-15
   },
   "surface_ranges": {
     "openfll_min": 0.4967491406577252,
     "openfll_max": 1.4245054752241335,
     "openfll_nonfinite": 0,
-    "simpful_sample_nonfinite": 0,
-    "regressor_min": 0.43613334660691117,
-    "regressor_max": 3.0746837733855177,
-    "regressor_nonfinite": 0
+    "simpful_sample_nonfinite": 0
   },
   "fixed_model_surface_statistics_by_concentration": {
     "0.0": {
+      "P": 27.3715,
+      "status": "measured",
       "mean": 0.9149556528513844,
       "std": 0.24888165920258432,
       "min": 0.4967491406577252,
       "max": 1.2293599339255352
     },
     "0.1": {
+      "P": 23.01,
+      "status": "measured",
       "mean": 0.9272639162510055,
       "std": 0.2407922816252309,
       "min": 0.4967491406577252,
       "max": 1.2125240738689245
     },
+    "0.2": {
+      "P": 19.248185,
+      "status": "intermediate_prediction",
+      "mean": 0.9560003608244864,
+      "std": 0.22930399221620193,
+      "min": 0.4967491406577261,
+      "max": 1.2839932613637821
+    },
+    "0.3": {
+      "P": 15.486370000000003,
+      "status": "intermediate_prediction",
+      "mean": 0.9898161379890902,
+      "std": 0.2088125165889901,
+      "min": 0.4967491406712399,
+      "max": 1.3789318338404282
+    },
+    "0.4": {
+      "P": 11.724555,
+      "status": "intermediate_prediction",
+      "mean": 1.0292499709612237,
+      "std": 0.17426655728565463,
+      "min": 0.4967535049702404,
+      "max": 1.4167012424077254
+    },
     "0.5": {
+      "P": 7.96274,
+      "status": "measured",
       "mean": 1.067358583097176,
       "std": 0.12670057835387302,
       "min": 0.502540516145762,
       "max": 1.4245054752241335
     }
   },
+  "porosity_sweep": {
+    "P_min": 7.96274,
+    "P_max": 27.3715,
+    "levels": 196,
+    "mean_KIC_min": 0.9149556528513844,
+    "mean_KIC_max": 1.067358583097176
+  },
   "timings": {
-    "openfll_seconds": 0.11606479994952679,
-    "numpy_seconds": 0.05657320003956556,
-    "simpful_seconds": 2.882016699993983,
-    "sugeno_regressor_seconds": 0.6608443999430165,
-    "fixed_model_leave_one_out_seconds": 0.015707100043073297
+    "openfll_seconds": 0.2887419000035152,
+    "numpy_seconds": 0.12547319999430329,
+    "simpful_seconds": 2.929142399923876,
+    "porosity_sweep_seconds": 15.453765399986878
   },
   "plots": [
     "surface_openfll_0.0.png",
-    "difference_openfll_numpy_0.0.png",
     "surface_openfll_0.1.png",
-    "difference_openfll_numpy_0.1.png",
+    "surface_openfll_0.2.png",
+    "surface_openfll_0.3.png",
+    "surface_openfll_0.4.png",
     "surface_openfll_0.5.png",
-    "difference_openfll_numpy_0.5.png"
+    "mean_kic_vs_porosity.png"
   ],
   "limitations": [
     "The supplied article does not include the optimized Gaussian centers and sigmas.",
     "This run uses deterministic neighbor-based initial widths, not the article's genetic optimization.",
-    "Training metrics are in-sample reproduction metrics and do not measure unseen physical concentrations.",
-    "Leave-one-out validation holds out observations but still evaluates only the three experimentally measured porosity levels.",
+    "All 26 experimental records are training data; training metrics are not reported as test accuracy.",
+    "The supplied files do not include the Niihara model-data array or all physical parameters required to reproduce it independently.",
+    "External Niihara validation is supported through --niihara-reference and is not replaced by calibration on the training records.",
+    "Intermediate-concentration surfaces are model predictions and have no independent experimental ground truth.",
     "Simpful surface parity uses a deterministic stratified sample because its rule evaluation is scalar and much slower than OpenFLL batch inference."
   ]
 }
