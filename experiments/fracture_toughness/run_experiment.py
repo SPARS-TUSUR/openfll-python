@@ -1,11 +1,13 @@
 """Reproduce and validate the fracture-toughness fuzzy surface.
 
-All 26 cleaned experimental observations are used as the training set. Each
+The final surface model uses all 26 cleaned experimental observations. Each
 observation defines one zero-order Takagi-Sugeno rule whose consequent is the
-observed positive KIC value; consequents are not refitted. The model predicts
-surfaces at measured and intermediate porosity values. OpenFLL predictions are
-compared with Simpful and an independent NumPy oracle. If a separately supplied
-Niihara reference dataset is available, it is evaluated as an external test set.
+observed positive KIC value; consequents are not refitted. Generalization on
+physical observations is estimated separately with a stratified 80/20 holdout
+and repeated stratified cross-validation, rebuilding the model on every training
+fold. OpenFLL predictions are compared with Simpful and an independent NumPy
+oracle. If a separately supplied Niihara reference dataset is available, it is
+evaluated as an external theoretical test surface.
 """
 from __future__ import annotations
 
@@ -31,6 +33,10 @@ ARTICLE_A_RANGE = (14.0, 39.0)
 ARTICLE_C_RANGE = (48.0, 109.0)
 P_SWEEP_STEP = 0.1
 TARGET_CONCENTRATIONS = (0.0, 0.1, 0.2, 0.3, 0.4, 0.5)
+VALIDATION_RANDOM_STATE = 42
+HOLDOUT_TEST_FRACTION = 0.2
+VALIDATION_FOLDS = 5
+VALIDATION_REPEATS = 10
 
 
 @dataclass(frozen=True)
@@ -280,6 +286,7 @@ def metric_summary(y_true: np.ndarray, y_pred: np.ndarray) -> dict[str, float | 
     residual = y_pred - y_true
     mse = float(np.mean(residual**2))
     denominator = float(np.sum((y_true - np.mean(y_true)) ** 2))
+    r2 = float(1.0 - np.sum(residual**2) / denominator) if denominator > 0.0 else math.nan
     return {
         "n": int(len(y_true)),
         "finite": int(finite.sum()),
@@ -288,8 +295,231 @@ def metric_summary(y_true: np.ndarray, y_pred: np.ndarray) -> dict[str, float | 
         "rmse": math.sqrt(mse),
         "mae": float(np.mean(np.abs(residual))),
         "max_abs_error": float(np.max(np.abs(residual))),
-        "r2": float(1.0 - np.sum(residual**2) / denominator),
+        "r2": r2,
     }
+
+
+def _counts_by_porosity(records: Sequence[Observation], indices: np.ndarray) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for index in np.asarray(indices, dtype=int):
+        key = f"{records[int(index)].P:g}"
+        counts[key] = counts.get(key, 0) + 1
+    return counts
+
+
+def stratified_holdout_indices(
+    records: Sequence[Observation],
+    *,
+    test_fraction: float = HOLDOUT_TEST_FRACTION,
+    random_state: int = VALIDATION_RANDOM_STATE,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Create a deterministic holdout containing every observed porosity level."""
+    if not 0.0 < test_fraction < 1.0:
+        raise ValueError("test_fraction must be between 0 and 1")
+    labels = np.asarray([item.P for item in records], dtype=np.float64)
+    random = np.random.default_rng(random_state)
+    test_parts: list[np.ndarray] = []
+    for label in sorted(set(float(value) for value in labels)):
+        candidates = np.flatnonzero(labels == label)
+        if len(candidates) < 2:
+            raise ValueError("Every porosity stratum needs at least two observations")
+        shuffled = random.permutation(candidates)
+        test_count = min(len(candidates) - 1, max(1, int(round(len(candidates) * test_fraction))))
+        test_parts.append(shuffled[:test_count])
+    test_indices = np.sort(np.concatenate(test_parts))
+    train_indices = np.setdiff1d(np.arange(len(records), dtype=int), test_indices)
+    return train_indices, test_indices
+
+
+def repeated_stratified_folds(
+    records: Sequence[Observation],
+    *,
+    n_splits: int = VALIDATION_FOLDS,
+    n_repeats: int = VALIDATION_REPEATS,
+    random_state: int = VALIDATION_RANDOM_STATE,
+) -> list[tuple[int, int, np.ndarray, np.ndarray]]:
+    """Return reproducible repeated folds stratified by experimental porosity."""
+    if n_splits < 2:
+        raise ValueError("n_splits must be at least 2")
+    if n_repeats < 1:
+        raise ValueError("n_repeats must be positive")
+    labels = np.asarray([item.P for item in records], dtype=np.float64)
+    strata = {
+        label: np.flatnonzero(labels == label)
+        for label in sorted(set(float(value) for value in labels))
+    }
+    if min(len(indices) for indices in strata.values()) < n_splits:
+        raise ValueError("Each porosity stratum must contain at least n_splits observations")
+
+    all_indices = np.arange(len(records), dtype=int)
+    folds: list[tuple[int, int, np.ndarray, np.ndarray]] = []
+    for repeat in range(n_repeats):
+        random = np.random.default_rng(random_state + repeat)
+        split_strata = {
+            label: np.array_split(random.permutation(indices), n_splits)
+            for label, indices in strata.items()
+        }
+        for fold in range(n_splits):
+            test_indices = np.sort(
+                np.concatenate([split_strata[label][fold] for label in split_strata])
+            )
+            train_indices = np.setdiff1d(all_indices, test_indices)
+            folds.append((repeat + 1, fold + 1, train_indices, test_indices))
+    return folds
+
+
+def _predict_held_out_records(
+    records: Sequence[Observation],
+    train_indices: np.ndarray,
+    test_indices: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    if np.intersect1d(train_indices, test_indices).size:
+        raise ValueError("Training and test indices must not overlap")
+    train_records = [records[int(index)] for index in train_indices]
+    test_records = [records[int(index)] for index in test_indices]
+    model = build_model_definition(train_records)
+    X_test, y_test = observations_to_arrays(test_records)
+    openfll_predictions = predict_openfll(build_openfll_engine(model), X_test)
+    numpy_predictions = predict_numpy(model, X_test)
+    return y_test, openfll_predictions, numpy_predictions
+
+
+def evaluate_experimental_holdout(
+    records: Sequence[Observation],
+    *,
+    test_fraction: float = HOLDOUT_TEST_FRACTION,
+    random_state: int = VALIDATION_RANDOM_STATE,
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    """Evaluate one stratified train/test split without using test records in rules."""
+    train_indices, test_indices = stratified_holdout_indices(
+        records, test_fraction=test_fraction, random_state=random_state
+    )
+    y_test, predictions, numpy_predictions = _predict_held_out_records(
+        records, train_indices, test_indices
+    )
+    rows: list[dict[str, Any]] = []
+    for position, record_index in enumerate(test_indices):
+        item = records[int(record_index)]
+        residual = float(predictions[position] - y_test[position])
+        rows.append(
+            {
+                "record_id": item.record_id,
+                "concentration_mass_pct": item.concentration_mass_pct,
+                "P": item.P,
+                "a": item.a,
+                "c": item.c,
+                "KIC_observed": item.KIC,
+                "KIC_predicted": float(predictions[position]),
+                "residual": residual,
+                "abs_error": abs(residual),
+            }
+        )
+    summary = {
+        "method": "stratified holdout by P; model rebuilt from training records only",
+        "random_state": random_state,
+        "requested_test_fraction": test_fraction,
+        "train_records": int(len(train_indices)),
+        "test_records": int(len(test_indices)),
+        "actual_test_fraction": float(len(test_indices) / len(records)),
+        "train_counts_by_porosity": _counts_by_porosity(records, train_indices),
+        "test_counts_by_porosity": _counts_by_porosity(records, test_indices),
+        "train_record_ids": [records[int(index)].record_id for index in train_indices],
+        "test_record_ids": [records[int(index)].record_id for index in test_indices],
+        "metrics": metric_summary(y_test, predictions),
+        "implementation_parity_openfll_vs_numpy": parity_summary(
+            predictions, numpy_predictions
+        ),
+    }
+    return summary, rows
+
+
+def _metric_distribution(metric_rows: Sequence[dict[str, Any]]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for metric in ("mse", "rmse", "mae", "max_abs_error", "r2"):
+        values = np.asarray([row[metric] for row in metric_rows], dtype=np.float64)
+        result[metric] = {
+            "mean": float(np.mean(values)),
+            "std": float(np.std(values, ddof=1)) if len(values) > 1 else 0.0,
+            "min": float(np.min(values)),
+            "max": float(np.max(values)),
+        }
+    return result
+
+
+def evaluate_experimental_cross_validation(
+    records: Sequence[Observation],
+    *,
+    n_splits: int = VALIDATION_FOLDS,
+    n_repeats: int = VALIDATION_REPEATS,
+    random_state: int = VALIDATION_RANDOM_STATE,
+) -> tuple[dict[str, Any], list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
+    """Run repeated stratified CV, rebuilding every fold from its training records."""
+    prediction_rows: list[dict[str, Any]] = []
+    fold_rows: list[dict[str, Any]] = []
+    parity_maximum = 0.0
+    for repeat, fold, train_indices, test_indices in repeated_stratified_folds(
+        records, n_splits=n_splits, n_repeats=n_repeats, random_state=random_state
+    ):
+        y_test, predictions, numpy_predictions = _predict_held_out_records(
+            records, train_indices, test_indices
+        )
+        parity = parity_summary(predictions, numpy_predictions)
+        parity_maximum = max(parity_maximum, float(parity["max_abs_diff"]))
+        fold_metrics = metric_summary(y_test, predictions)
+        fold_rows.append(
+            {
+                "repeat": repeat,
+                "fold": fold,
+                "train_records": int(len(train_indices)),
+                "test_records": int(len(test_indices)),
+                **fold_metrics,
+            }
+        )
+        for position, record_index in enumerate(test_indices):
+            item = records[int(record_index)]
+            residual = float(predictions[position] - y_test[position])
+            prediction_rows.append(
+                {
+                    "repeat": repeat,
+                    "fold": fold,
+                    "record_id": item.record_id,
+                    "concentration_mass_pct": item.concentration_mass_pct,
+                    "P": item.P,
+                    "a": item.a,
+                    "c": item.c,
+                    "KIC_observed": item.KIC,
+                    "KIC_predicted": float(predictions[position]),
+                    "residual": residual,
+                    "abs_error": abs(residual),
+                }
+            )
+
+    repeat_rows: list[dict[str, Any]] = []
+    for repeat in range(1, n_repeats + 1):
+        selected = [row for row in prediction_rows if row["repeat"] == repeat]
+        y_true = np.asarray([row["KIC_observed"] for row in selected], dtype=np.float64)
+        y_pred = np.asarray([row["KIC_predicted"] for row in selected], dtype=np.float64)
+        repeat_rows.append({"repeat": repeat, **metric_summary(y_true, y_pred)})
+
+    all_true = np.asarray([row["KIC_observed"] for row in prediction_rows], dtype=np.float64)
+    all_predicted = np.asarray([row["KIC_predicted"] for row in prediction_rows], dtype=np.float64)
+    prediction_counts = {
+        str(record.record_id): sum(row["record_id"] == record.record_id for row in prediction_rows)
+        for record in records
+    }
+    summary = {
+        "method": "repeated stratified k-fold by P; model rebuilt from each training fold only",
+        "random_state": random_state,
+        "folds": n_splits,
+        "repeats": n_repeats,
+        "fitted_models": n_splits * n_repeats,
+        "held_out_predictions": len(prediction_rows),
+        "predictions_per_record": prediction_counts,
+        "aggregate_metrics": metric_summary(all_true, all_predicted),
+        "repeat_metric_distribution": _metric_distribution(repeat_rows),
+        "max_openfll_numpy_abs_diff": parity_maximum,
+    }
+    return summary, prediction_rows, fold_rows, repeat_rows
 
 
 def metric_summary_by_porosity(
@@ -307,6 +537,107 @@ def metric_summary_by_porosity(
     for P in sorted(set(float(value) for value in X[:, 0])):
         mask = X[:, 0] == P
         rows.append({"P": P, **metric_summary(y_true[mask], y_pred[mask])})
+    return rows
+
+
+def error_diagnostics(
+    X: np.ndarray,
+    y_true: np.ndarray,
+    y_pred: np.ndarray,
+) -> dict[str, Any]:
+    """Describe residual direction, tails, tolerance coverage and worst point."""
+    X = np.asarray(X, dtype=np.float64)
+    y_true = np.asarray(y_true, dtype=np.float64)
+    y_pred = np.asarray(y_pred, dtype=np.float64)
+    if X.shape != (len(y_true), 3) or len(y_true) != len(y_pred):
+        raise ValueError("X, y_true and y_pred must contain aligned observations")
+    residual = y_pred - y_true
+    absolute = np.abs(residual)
+    worst = int(np.argmax(absolute))
+    return {
+        "mean_residual_bias": float(np.mean(residual)),
+        "median_residual": float(np.median(residual)),
+        "median_abs_error": float(np.median(absolute)),
+        "p90_abs_error": float(np.quantile(absolute, 0.90)),
+        "p95_abs_error": float(np.quantile(absolute, 0.95)),
+        "share_abs_error_le_0_05": float(np.mean(absolute <= 0.05)),
+        "share_abs_error_le_0_10": float(np.mean(absolute <= 0.10)),
+        "share_abs_error_le_0_20": float(np.mean(absolute <= 0.20)),
+        "share_abs_error_le_0_30": float(np.mean(absolute <= 0.30)),
+        "underprediction_share": float(np.mean(residual < 0.0)),
+        "overprediction_share": float(np.mean(residual > 0.0)),
+        "worst_point": {
+            "P": float(X[worst, 0]),
+            "a": float(X[worst, 1]),
+            "c": float(X[worst, 2]),
+            "KIC_reference": float(y_true[worst]),
+            "KIC_predicted": float(y_pred[worst]),
+            "residual": float(residual[worst]),
+            "abs_error": float(absolute[worst]),
+        },
+    }
+
+
+def error_breakdown_rows(
+    X: np.ndarray,
+    y_true: np.ndarray,
+    y_pred: np.ndarray,
+    *,
+    bins: int = 5,
+) -> list[dict[str, Any]]:
+    """Summarize theoretical errors by P and equal-width intervals of a and c."""
+    if bins < 2:
+        raise ValueError("bins must be at least 2")
+    X = np.asarray(X, dtype=np.float64)
+    y_true = np.asarray(y_true, dtype=np.float64)
+    y_pred = np.asarray(y_pred, dtype=np.float64)
+    if X.shape != (len(y_true), 3) or len(y_true) != len(y_pred):
+        raise ValueError("X, y_true and y_pred must contain aligned observations")
+    residual = y_pred - y_true
+
+    def summarize(
+        grouping: str,
+        label: str,
+        mask: np.ndarray,
+        lower: float,
+        upper: float,
+    ) -> dict[str, Any]:
+        selected = residual[mask]
+        absolute = np.abs(selected)
+        return {
+            "grouping": grouping,
+            "group": label,
+            "lower": lower,
+            "upper": upper,
+            "n": int(mask.sum()),
+            "bias": float(np.mean(selected)),
+            "mae": float(np.mean(absolute)),
+            "rmse": float(np.sqrt(np.mean(selected**2))),
+            "p95_abs_error": float(np.quantile(absolute, 0.95)),
+            "max_abs_error": float(np.max(absolute)),
+        }
+
+    rows: list[dict[str, Any]] = []
+    for P in sorted(set(float(value) for value in X[:, 0])):
+        mask = X[:, 0] == P
+        rows.append(summarize("P", f"P={P:g}", mask, P, P))
+    for column, name in ((1, "a"), (2, "c")):
+        edges = np.linspace(float(np.min(X[:, column])), float(np.max(X[:, column])), bins + 1)
+        assignments = np.digitize(X[:, column], edges[1:-1], right=False)
+        for index in range(bins):
+            lower = float(edges[index])
+            upper = float(edges[index + 1])
+            mask = assignments == index
+            bracket = "]" if index == bins - 1 else ")"
+            rows.append(
+                summarize(
+                    f"{name}_bin",
+                    f"[{lower:.6g}, {upper:.6g}{bracket}",
+                    mask,
+                    lower,
+                    upper,
+                )
+            )
     return rows
 
 
@@ -693,6 +1024,62 @@ def save_niihara_validation_plots(
     return written
 
 
+def save_experimental_validation_plot(
+    results_dir: Path,
+    holdout_rows: Sequence[dict[str, Any]],
+    cross_validation_rows: Sequence[dict[str, Any]],
+) -> str | None:
+    """Save observed-versus-predicted plots for physical holdout validation."""
+    try:
+        import matplotlib
+
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+    except ImportError:
+        return None
+
+    fig, axes = plt.subplots(1, 2, figsize=(11, 5), sharex=True, sharey=True)
+    panels = (
+        (axes[0], holdout_rows, "Stratified holdout (6 test points)"),
+        (axes[1], cross_validation_rows, "Repeated 5-fold CV (260 predictions)"),
+    )
+    all_observed = np.asarray(
+        [row["KIC_observed"] for row in (*holdout_rows, *cross_validation_rows)],
+        dtype=np.float64,
+    )
+    all_predicted = np.asarray(
+        [row["KIC_predicted"] for row in (*holdout_rows, *cross_validation_rows)],
+        dtype=np.float64,
+    )
+    lower = float(min(np.min(all_observed), np.min(all_predicted)))
+    upper = float(max(np.max(all_observed), np.max(all_predicted)))
+    padding = (upper - lower) * 0.04
+    for axis, rows, title in panels:
+        for P in sorted({float(row["P"]) for row in rows}):
+            selected = [row for row in rows if row["P"] == P]
+            axis.scatter(
+                [row["KIC_observed"] for row in selected],
+                [row["KIC_predicted"] for row in selected],
+                s=28,
+                alpha=0.58,
+                label=f"P={P:g}",
+            )
+        axis.plot([lower, upper], [lower, upper], color="black", linestyle="--", linewidth=1.2)
+        axis.set_xlim(lower - padding, upper + padding)
+        axis.set_ylim(lower - padding, upper + padding)
+        axis.set_title(title)
+        axis.set_xlabel("Observed KIC (MPa*m^0.5)")
+        axis.grid(alpha=0.2)
+    axes[0].set_ylabel("Predicted KIC (MPa*m^0.5)")
+    axes[1].legend(fontsize=8)
+    fig.suptitle("Experimental generalization without test-record leakage")
+    fig.tight_layout()
+    name = "experimental_validation_parity.png"
+    fig.savefig(results_dir / name, dpi=170)
+    plt.close(fig)
+    return name
+
+
 def model_to_json(model: ModelDefinition) -> dict[str, Any]:
     return {
         "inputs": {
@@ -745,6 +1132,16 @@ def run_experiment(
 
     timings: dict[str, float] = {}
     t0 = time.perf_counter()
+    holdout_summary, holdout_rows = evaluate_experimental_holdout(records)
+    (
+        cross_validation_summary,
+        cross_validation_rows,
+        cross_validation_fold_rows,
+        cross_validation_repeat_rows,
+    ) = evaluate_experimental_cross_validation(records)
+    timings["experimental_validation_seconds"] = time.perf_counter() - t0
+
+    t0 = time.perf_counter()
     openfll_engine = build_openfll_engine(model)
     openfll_train = predict_openfll(openfll_engine, X_train)
     openfll_surface = predict_openfll(openfll_engine, surface_X)
@@ -764,6 +1161,7 @@ def run_experiment(
     timings["simpful_seconds"] = time.perf_counter() - t0
 
     niihara_validation: dict[str, Any]
+    niihara_error_rows: list[dict[str, Any]] = []
     niihara_validation_plots: list[str] = []
     if niihara_reference_path is None and niihara_predictors_path is None:
         niihara_validation = {
@@ -803,6 +1201,9 @@ def run_experiment(
         metrics_by_porosity = metric_summary_by_porosity(
             niihara_X, niihara_y, niihara_predictions
         )
+        niihara_error_rows = error_breakdown_rows(
+            niihara_X, niihara_y, niihara_predictions
+        )
         timings["niihara_reference_seconds"] = time.perf_counter() - t0
         niihara_validation = {
             "status": "completed_external_reference",
@@ -819,6 +1220,9 @@ def run_experiment(
                 "max": float(np.max(niihara_predictions)),
             },
             "metrics": metric_summary(niihara_y, niihara_predictions),
+            "error_diagnostics": error_diagnostics(
+                niihara_X, niihara_y, niihara_predictions
+            ),
             "metrics_by_porosity": metrics_by_porosity,
             "implementation_parity_openfll_vs_numpy": parity_summary(
                 niihara_predictions, niihara_numpy_predictions
@@ -848,6 +1252,21 @@ def run_experiment(
                     row["max_abs_error"], row["r2"],
                 ]
                 for row in metrics_by_porosity
+            ),
+        )
+        write_csv(
+            results_dir / "niihara_error_analysis.csv",
+            [
+                "grouping", "group", "lower", "upper", "n", "bias", "mae",
+                "rmse", "p95_abs_error", "max_abs_error",
+            ],
+            (
+                [
+                    row["grouping"], row["group"], row["lower"], row["upper"],
+                    row["n"], row["bias"], row["mae"], row["rmse"],
+                    row["p95_abs_error"], row["max_abs_error"],
+                ]
+                for row in niihara_error_rows
             ),
         )
         niihara_validation_plots = save_niihara_validation_plots(
@@ -909,12 +1328,53 @@ def run_experiment(
         ["P", "KIC_mean", "KIC_std", "KIC_min", "KIC_max"],
         ([row["P"], row["mean"], row["std"], row["min"], row["max"]] for row in sweep_rows),
     )
+    validation_prediction_header = [
+        "record_id", "concentration_mass_pct", "P", "a", "c", "KIC_observed",
+        "KIC_predicted", "residual", "abs_error",
+    ]
+    write_csv(
+        results_dir / "experimental_holdout_predictions.csv",
+        validation_prediction_header,
+        ([row[column] for column in validation_prediction_header] for row in holdout_rows),
+    )
+    cross_validation_prediction_header = ["repeat", "fold", *validation_prediction_header]
+    write_csv(
+        results_dir / "experimental_cross_validation_predictions.csv",
+        cross_validation_prediction_header,
+        (
+            [row[column] for column in cross_validation_prediction_header]
+            for row in cross_validation_rows
+        ),
+    )
+    fold_header = [
+        "repeat", "fold", "train_records", "test_records", "n", "finite",
+        "nan_or_inf", "mse", "rmse", "mae", "max_abs_error", "r2",
+    ]
+    write_csv(
+        results_dir / "experimental_cross_validation_folds.csv",
+        fold_header,
+        ([row[column] for column in fold_header] for row in cross_validation_fold_rows),
+    )
+    repeat_header = [
+        "repeat", "n", "finite", "nan_or_inf", "mse", "rmse", "mae",
+        "max_abs_error", "r2",
+    ]
+    write_csv(
+        results_dir / "experimental_cross_validation_repeats.csv",
+        repeat_header,
+        ([row[column] for column in repeat_header] for row in cross_validation_repeat_rows),
+    )
 
     plots = save_plots(results_dir, surface_X, concentrations, openfll_surface, grid_size)
     plots.extend(niihara_validation_plots)
     sweep_plot = save_porosity_sweep_plot(results_dir, sweep_rows)
     if sweep_plot is not None:
         plots.append(sweep_plot)
+    experimental_validation_plot = save_experimental_validation_plot(
+        results_dir, holdout_rows, cross_validation_rows
+    )
+    if experimental_validation_plot is not None:
+        plots.append(experimental_validation_plot)
     surface_statistics = {
         f"{concentration:.1f}": {
             "P": float(surface_X[concentrations == concentration, 0][0]),
@@ -961,6 +1421,14 @@ def run_experiment(
             "all_positive": bool(np.all(consequent_values > 0.0)),
         },
         "fixed_model_training_metrics": metric_summary(y_train, openfll_train),
+        "experimental_validation": {
+            "role": (
+                "generalization assessment on held-out physical observations; the final surface "
+                "model is subsequently rebuilt from all 26 records"
+            ),
+            "holdout": holdout_summary,
+            "repeated_cross_validation": cross_validation_summary,
+        },
         "niihara_validation": niihara_validation,
         "parity": {
             "training_openfll_vs_simpful": parity_summary(openfll_train, simpful_train),
@@ -989,7 +1457,9 @@ def run_experiment(
         "limitations": [
             "The supplied article does not include the optimized Gaussian centers and sigmas.",
             "This run uses deterministic neighbor-based initial widths, not the article's genetic optimization.",
-            "All 26 experimental records are training data; training metrics are not reported as test accuracy.",
+            "The final surface model uses all 26 experimental records; its training metrics are not reported as test accuracy.",
+            "The 80/20 holdout contains only six test records, so its result is sensitive to the selected split.",
+            "Repeated 5-fold cross-validation reduces split sensitivity but remains uncertain because only 26 physical observations are available.",
             "The theoretical reference is evaluated only after model construction and is never used to fit rules, membership functions or consequents.",
             "The external theoretical values validate agreement with the supplied analytical surface; they are not additional physical experiments.",
             "Intermediate-concentration surfaces are model predictions and have no independent experimental ground truth.",

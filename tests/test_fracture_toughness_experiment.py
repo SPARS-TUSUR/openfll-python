@@ -11,6 +11,10 @@ from experiments.fracture_toughness.run_experiment import (
     build_simpful_system,
     concentration_to_porosity,
     create_surface_points,
+    error_breakdown_rows,
+    error_diagnostics,
+    evaluate_experimental_cross_validation,
+    evaluate_experimental_holdout,
     load_observations,
     load_niihara_reference,
     load_niihara_workbooks,
@@ -21,6 +25,8 @@ from experiments.fracture_toughness.run_experiment import (
     predict_openfll,
     predict_simpful_from_strengths,
     predict_simpful_scalar,
+    repeated_stratified_folds,
+    stratified_holdout_indices,
 )
 
 
@@ -146,6 +152,86 @@ def test_theoretical_metrics_are_grouped_by_porosity():
     assert [row["P"] for row in metrics] == [7.0, 23.0]
     assert metrics[0]["mse"] == pytest.approx(0.0)
     assert metrics[1]["mse"] == pytest.approx(0.5)
+
+
+def test_error_diagnostics_and_breakdown_identify_direction_and_worst_point():
+    X = np.asarray(
+        [
+            [7.0, 10.0, 40.0],
+            [7.0, 20.0, 50.0],
+            [23.0, 30.0, 60.0],
+            [23.0, 40.0, 70.0],
+        ]
+    )
+    y_true = np.asarray([1.0, 1.0, 1.0, 1.0])
+    y_pred = np.asarray([0.9, 1.0, 1.2, 1.5])
+    diagnostics = error_diagnostics(X, y_true, y_pred)
+    assert diagnostics["mean_residual_bias"] == pytest.approx(0.15)
+    assert diagnostics["share_abs_error_le_0_10"] == pytest.approx(0.5)
+    assert diagnostics["worst_point"] == pytest.approx(
+        {
+            "P": 23.0,
+            "a": 40.0,
+            "c": 70.0,
+            "KIC_reference": 1.0,
+            "KIC_predicted": 1.5,
+            "residual": 0.5,
+            "abs_error": 0.5,
+        }
+    )
+    rows = error_breakdown_rows(X, y_true, y_pred, bins=2)
+    assert len(rows) == 6
+    assert [row["grouping"] for row in rows[:2]] == ["P", "P"]
+    assert sum(row["n"] for row in rows if row["grouping"] == "a_bin") == 4
+
+
+def test_experimental_holdout_is_stratified_reproducible_and_leak_free():
+    records, _ = _model_data()
+    train_indices, test_indices = stratified_holdout_indices(records)
+    train_again, test_again = stratified_holdout_indices(records)
+    assert train_indices.tolist() == train_again.tolist()
+    assert test_indices.tolist() == test_again.tolist()
+    assert len(train_indices) == 20
+    assert len(test_indices) == 6
+    assert not np.intersect1d(train_indices, test_indices).size
+    assert sorted(records[index].P for index in test_indices) == pytest.approx(
+        [7.96274, 7.96274, 23.01, 23.01, 27.3715, 27.3715]
+    )
+
+    summary, rows = evaluate_experimental_holdout(records)
+    assert summary["train_records"] == 20
+    assert summary["test_records"] == 6
+    assert summary["test_counts_by_porosity"] == {"7.96274": 2, "23.01": 2, "27.3715": 2}
+    assert len(rows) == 6
+    assert summary["metrics"]["finite"] == 6
+    assert summary["implementation_parity_openfll_vs_numpy"]["max_abs_diff"] < 1e-12
+
+
+def test_repeated_stratified_cross_validation_covers_every_record_without_leakage():
+    records, _ = _model_data()
+    folds = repeated_stratified_folds(records, n_splits=5, n_repeats=3)
+    assert len(folds) == 15
+    for repeat in range(1, 4):
+        repeat_tests = []
+        for current_repeat, _, train_indices, test_indices in folds:
+            if current_repeat != repeat:
+                continue
+            assert not np.intersect1d(train_indices, test_indices).size
+            assert set(records[index].P for index in test_indices) == {7.96274, 23.01, 27.3715}
+            repeat_tests.extend(test_indices.tolist())
+        assert sorted(repeat_tests) == list(range(26))
+
+    summary, prediction_rows, fold_rows, repeat_rows = evaluate_experimental_cross_validation(
+        records, n_splits=5, n_repeats=3
+    )
+    assert summary["fitted_models"] == 15
+    assert summary["held_out_predictions"] == 78
+    assert set(summary["predictions_per_record"].values()) == {3}
+    assert summary["aggregate_metrics"]["finite"] == 78
+    assert summary["max_openfll_numpy_abs_diff"] < 1e-12
+    assert len(prediction_rows) == 78
+    assert len(fold_rows) == 15
+    assert len(repeat_rows) == 3
 
 
 def test_simpful_matches_openfll_and_its_scalar_sugeno_inference():
