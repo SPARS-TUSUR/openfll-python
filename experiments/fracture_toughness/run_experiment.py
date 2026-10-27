@@ -540,6 +540,139 @@ def metric_summary_by_porosity(
     return rows
 
 
+def compare_full_and_reduced_models(
+    records: Sequence[Observation],
+    reference_X: np.ndarray,
+    reference_y: np.ndarray,
+    full_engine: Any,
+    *,
+    full_reference_predictions: np.ndarray | None = None,
+    test_fraction: float = HOLDOUT_TEST_FRACTION,
+    random_state: int = VALIDATION_RANDOM_STATE,
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    """Compare 26- and 20-record models on the same theoretical reference.
+
+    The reduced model uses exactly the training part of the fixed stratified
+    holdout. The six excluded physical observations are never used to construct
+    its rules or membership functions.
+    """
+    reference_X = np.asarray(reference_X, dtype=np.float64)
+    reference_y = np.asarray(reference_y, dtype=np.float64)
+    if full_reference_predictions is None:
+        full_reference_predictions = predict_openfll(full_engine, reference_X)
+    else:
+        full_reference_predictions = np.asarray(full_reference_predictions, dtype=np.float64)
+
+    train_indices, test_indices = stratified_holdout_indices(
+        records, test_fraction=test_fraction, random_state=random_state
+    )
+    reduced_records = [records[int(index)] for index in train_indices]
+    held_out_records = [records[int(index)] for index in test_indices]
+    reduced_engine = build_openfll_engine(build_model_definition(reduced_records))
+    reduced_reference_predictions = predict_openfll(reduced_engine, reference_X)
+
+    full_metrics = metric_summary(reference_y, full_reference_predictions)
+    reduced_metrics = metric_summary(reference_y, reduced_reference_predictions)
+    full_by_porosity = metric_summary_by_porosity(
+        reference_X, reference_y, full_reference_predictions
+    )
+    reduced_by_porosity = metric_summary_by_porosity(
+        reference_X, reference_y, reduced_reference_predictions
+    )
+
+    comparison_rows: list[dict[str, Any]] = []
+
+    def append_metrics(
+        scope: str,
+        P: float | None,
+        model_name: str,
+        training_records: int,
+        metrics: dict[str, Any],
+    ) -> None:
+        comparison_rows.append(
+            {
+                "scope": scope,
+                "P": "all" if P is None else P,
+                "model": model_name,
+                "training_records": training_records,
+                **metrics,
+            }
+        )
+
+    append_metrics("theoretical_reference", None, "full_26", len(records), full_metrics)
+    append_metrics(
+        "theoretical_reference", None, "reduced_20", len(reduced_records), reduced_metrics
+    )
+    for full_row, reduced_row in zip(full_by_porosity, reduced_by_porosity, strict=True):
+        if full_row["P"] != reduced_row["P"]:
+            raise RuntimeError("Porosity groups are misaligned in model-size comparison")
+        append_metrics(
+            "theoretical_reference", float(full_row["P"]), "full_26", len(records), full_row
+        )
+        append_metrics(
+            "theoretical_reference",
+            float(reduced_row["P"]),
+            "reduced_20",
+            len(reduced_records),
+            reduced_row,
+        )
+
+    held_out_X, held_out_y = observations_to_arrays(held_out_records)
+    full_held_out_predictions = predict_openfll(full_engine, held_out_X)
+    reduced_held_out_predictions = predict_openfll(reduced_engine, held_out_X)
+    difference = reduced_reference_predictions - full_reference_predictions
+
+    error_metric_increase_percent = {
+        metric: (
+            float((reduced_metrics[metric] / full_metrics[metric] - 1.0) * 100.0)
+            if full_metrics[metric] != 0.0
+            else math.nan
+        )
+        for metric in ("mse", "rmse", "mae", "max_abs_error")
+    }
+    summary = {
+        "method": (
+            "full model trained on all 26 physical records versus reduced model trained on "
+            "the 20-record part of the fixed stratified holdout; both evaluated on the same "
+            "30,000-point theoretical reference"
+        ),
+        "random_state": random_state,
+        "full_training_records": len(records),
+        "reduced_training_records": len(reduced_records),
+        "reduced_train_record_ids": [item.record_id for item in reduced_records],
+        "excluded_record_ids": [item.record_id for item in held_out_records],
+        "theoretical_reference": {
+            "full_26_metrics": full_metrics,
+            "reduced_20_metrics": reduced_metrics,
+            "error_metric_increase_percent_reduced_vs_full": error_metric_increase_percent,
+            "r2_absolute_drop": float(full_metrics["r2"] - reduced_metrics["r2"]),
+            "metrics_by_porosity": {
+                "full_26": full_by_porosity,
+                "reduced_20": reduced_by_porosity,
+            },
+        },
+        "prediction_difference_reduced_minus_full": {
+            "mean": float(np.mean(difference)),
+            "mae": float(np.mean(np.abs(difference))),
+            "rmse": float(np.sqrt(np.mean(difference**2))),
+            "max_abs_difference": float(np.max(np.abs(difference))),
+        },
+        "excluded_physical_records": {
+            "note": (
+                "The full model includes these six records in training, so this comparison is "
+                "descriptive and is biased in favor of the full model."
+            ),
+            "full_26_in_sample_metrics": metric_summary(
+                held_out_y, full_held_out_predictions
+            ),
+            "reduced_20_test_metrics": metric_summary(
+                held_out_y, reduced_held_out_predictions
+            ),
+        },
+    }
+    return summary, comparison_rows
+
+
 def error_diagnostics(
     X: np.ndarray,
     y_true: np.ndarray,
@@ -1198,6 +1331,13 @@ def run_experiment(
             }
         niihara_predictions = predict_openfll(openfll_engine, niihara_X)
         niihara_numpy_predictions = predict_numpy(model, niihara_X)
+        model_size_comparison, model_size_comparison_rows = compare_full_and_reduced_models(
+            records,
+            niihara_X,
+            niihara_y,
+            openfll_engine,
+            full_reference_predictions=niihara_predictions,
+        )
         metrics_by_porosity = metric_summary_by_porosity(
             niihara_X, niihara_y, niihara_predictions
         )
@@ -1223,6 +1363,7 @@ def run_experiment(
             "error_diagnostics": error_diagnostics(
                 niihara_X, niihara_y, niihara_predictions
             ),
+            "full_vs_reduced_training_comparison": model_size_comparison,
             "metrics_by_porosity": metrics_by_porosity,
             "implementation_parity_openfll_vs_numpy": parity_summary(
                 niihara_predictions, niihara_numpy_predictions
@@ -1267,6 +1408,18 @@ def run_experiment(
                     row["p95_abs_error"], row["max_abs_error"],
                 ]
                 for row in niihara_error_rows
+            ),
+        )
+        comparison_header = [
+            "scope", "P", "model", "training_records", "n", "finite",
+            "nan_or_inf", "mse", "rmse", "mae", "max_abs_error", "r2",
+        ]
+        write_csv(
+            results_dir / "niihara_model_size_comparison.csv",
+            comparison_header,
+            (
+                [row[column] for column in comparison_header]
+                for row in model_size_comparison_rows
             ),
         )
         niihara_validation_plots = save_niihara_validation_plots(
@@ -1460,6 +1613,7 @@ def run_experiment(
             "The final surface model uses all 26 experimental records; its training metrics are not reported as test accuracy.",
             "The 80/20 holdout contains only six test records, so its result is sensitive to the selected split.",
             "Repeated 5-fold cross-validation reduces split sensitivity but remains uncertain because only 26 physical observations are available.",
+            "The direct 26-versus-20 model comparison depends on one fixed stratified 20/6 split; cross-validation remains the more stable estimate of physical-sample generalization.",
             "The theoretical reference is evaluated only after model construction and is never used to fit rules, membership functions or consequents.",
             "The external theoretical values validate agreement with the supplied analytical surface; they are not additional physical experiments.",
             "Intermediate-concentration surfaces are model predictions and have no independent experimental ground truth.",

@@ -9,6 +9,7 @@ from experiments.fracture_toughness.run_experiment import (
     build_model_definition,
     build_openfll_engine,
     build_simpful_system,
+    compare_full_and_reduced_models,
     concentration_to_porosity,
     create_surface_points,
     error_breakdown_rows,
@@ -232,6 +233,28 @@ def test_repeated_stratified_cross_validation_covers_every_record_without_leakag
     assert len(prediction_rows) == 78
     assert len(fold_rows) == 15
     assert len(repeat_rows) == 3
+
+
+def test_full_and_reduced_model_comparison_uses_identical_reference_points():
+    records, model = _model_data()
+    X, y = observations_to_arrays(records)
+    engine = build_openfll_engine(model)
+    full_predictions = predict_openfll(engine, X)
+    summary, rows = compare_full_and_reduced_models(
+        records,
+        X,
+        y,
+        engine,
+        full_reference_predictions=full_predictions,
+    )
+    assert summary["full_training_records"] == 26
+    assert summary["reduced_training_records"] == 20
+    assert len(summary["excluded_record_ids"]) == 6
+    assert len(rows) == 8
+    assert {row["model"] for row in rows} == {"full_26", "reduced_20"}
+    assert all(row["n"] > 0 for row in rows)
+    assert summary["prediction_difference_reduced_minus_full"]["max_abs_difference"] > 0.0
+    assert summary["excluded_physical_records"]["reduced_20_test_metrics"]["n"] == 6
 
 
 def test_simpful_matches_openfll_and_its_scalar_sugeno_inference():

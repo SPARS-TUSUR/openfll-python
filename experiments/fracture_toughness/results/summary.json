@@ -265,6 +265,172 @@
         "abs_error": 0.8939996869474323
       }
     },
+    "full_vs_reduced_training_comparison": {
+      "method": "full model trained on all 26 physical records versus reduced model trained on the 20-record part of the fixed stratified holdout; both evaluated on the same 30,000-point theoretical reference",
+      "random_state": 42,
+      "full_training_records": 26,
+      "reduced_training_records": 20,
+      "reduced_train_record_ids": [
+        1,
+        2,
+        3,
+        4,
+        6,
+        7,
+        8,
+        9,
+        12,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        24,
+        25,
+        26
+      ],
+      "excluded_record_ids": [
+        5,
+        10,
+        11,
+        13,
+        22,
+        23
+      ],
+      "theoretical_reference": {
+        "full_26_metrics": {
+          "n": 30000,
+          "finite": 30000,
+          "nan_or_inf": 0,
+          "mse": 0.05846069936946215,
+          "rmse": 0.2417864747446849,
+          "mae": 0.18718455875048456,
+          "max_abs_error": 0.8939996869474323,
+          "r2": 0.5094886019108119
+        },
+        "reduced_20_metrics": {
+          "n": 30000,
+          "finite": 30000,
+          "nan_or_inf": 0,
+          "mse": 0.07109293208001864,
+          "rmse": 0.2666325788046514,
+          "mae": 0.1995543126665175,
+          "max_abs_error": 0.9243298981833241,
+          "r2": 0.4034985231968419
+        },
+        "error_metric_increase_percent_reduced_vs_full": {
+          "mse": 21.608076616947102,
+          "rmse": 10.27605207702491,
+          "mae": 6.608319617069336,
+          "max_abs_error": 3.3926422658440147
+        },
+        "r2_absolute_drop": 0.10599007871397004,
+        "metrics_by_porosity": {
+          "full_26": [
+            {
+              "P": 7.96274,
+              "n": 10000,
+              "finite": 10000,
+              "nan_or_inf": 0,
+              "mse": 0.10383842699211714,
+              "rmse": 0.32223970424532905,
+              "mae": 0.2665910367126097,
+              "max_abs_error": 0.8939996869474323,
+              "r2": 0.23179376933410423
+            },
+            {
+              "P": 23.01,
+              "n": 10000,
+              "finite": 10000,
+              "nan_or_inf": 0,
+              "mse": 0.041334458683866544,
+              "rmse": 0.20330877670151515,
+              "mae": 0.15701556722513638,
+              "max_abs_error": 0.7191275166828934,
+              "r2": 0.6309982089688717
+            },
+            {
+              "P": 27.3715,
+              "n": 10000,
+              "finite": 10000,
+              "nan_or_inf": 0,
+              "mse": 0.030209212432402786,
+              "rmse": 0.173807975744506,
+              "mae": 0.1379470723137077,
+              "max_abs_error": 0.5585069163191494,
+              "r2": 0.6739982241829995
+            }
+          ],
+          "reduced_20": [
+            {
+              "P": 7.96274,
+              "n": 10000,
+              "finite": 10000,
+              "nan_or_inf": 0,
+              "mse": 0.12109130200093282,
+              "rmse": 0.347981755270205,
+              "mae": 0.2693066242375056,
+              "max_abs_error": 0.9243298981833241,
+              "r2": 0.10415541364446834
+            },
+            {
+              "P": 23.01,
+              "n": 10000,
+              "finite": 10000,
+              "nan_or_inf": 0,
+              "mse": 0.0513402478058066,
+              "rmse": 0.2265838648399453,
+              "mae": 0.1723768422982124,
+              "max_abs_error": 0.8012598008101456,
+              "r2": 0.541674331888155
+            },
+            {
+              "P": 27.3715,
+              "n": 10000,
+              "finite": 10000,
+              "nan_or_inf": 0,
+              "mse": 0.040847246433316504,
+              "rmse": 0.2021070172787588,
+              "mae": 0.15697947146383445,
+              "max_abs_error": 0.8162191652876698,
+              "r2": 0.5591982113306398
+            }
+          ]
+        }
+      },
+      "prediction_difference_reduced_minus_full": {
+        "mean": 0.07042056430685414,
+        "mae": 0.10829297658612452,
+        "rmse": 0.15649219091346656,
+        "max_abs_difference": 0.6505519337884196
+      },
+      "excluded_physical_records": {
+        "note": "The full model includes these six records in training, so this comparison is descriptive and is biased in favor of the full model.",
+        "full_26_in_sample_metrics": {
+          "n": 6,
+          "finite": 6,
+          "nan_or_inf": 0,
+          "mse": 0.005278352303845706,
+          "rmse": 0.07265226977765873,
+          "mae": 0.041524563180190155,
+          "max_abs_error": 0.16956621201404531,
+          "r2": 0.8729783576664177
+        },
+        "reduced_20_test_metrics": {
+          "n": 6,
+          "finite": 6,
+          "nan_or_inf": 0,
+          "mse": 0.02511869438978306,
+          "rmse": 0.15848878316708429,
+          "mae": 0.13730762324098988,
+          "max_abs_error": 0.24112282783575756,
+          "r2": 0.3955276891349293
+        }
+      }
+    },
     "metrics_by_porosity": [
       {
         "P": 7.96274,
@@ -416,12 +582,12 @@
     "mean_KIC_max": 1.067358583097176
   },
   "timings": {
-    "experimental_validation_seconds": 0.09976669994648546,
-    "openfll_seconds": 0.2941675999900326,
-    "numpy_seconds": 0.1793600000673905,
-    "simpful_seconds": 5.435431300080381,
-    "niihara_reference_seconds": 3.6561877001076937,
-    "porosity_sweep_seconds": 27.950640400056727
+    "experimental_validation_seconds": 0.0888837999664247,
+    "openfll_seconds": 0.30174520006403327,
+    "numpy_seconds": 0.16659999988041818,
+    "simpful_seconds": 3.5961611000820994,
+    "niihara_reference_seconds": 1.9769818000495434,
+    "porosity_sweep_seconds": 14.936346399830654
   },
   "plots": [
     "surface_openfll_0.0.png",
@@ -441,6 +607,7 @@
     "The final surface model uses all 26 experimental records; its training metrics are not reported as test accuracy.",
     "The 80/20 holdout contains only six test records, so its result is sensitive to the selected split.",
     "Repeated 5-fold cross-validation reduces split sensitivity but remains uncertain because only 26 physical observations are available.",
+    "The direct 26-versus-20 model comparison depends on one fixed stratified 20/6 split; cross-validation remains the more stable estimate of physical-sample generalization.",
     "The theoretical reference is evaluated only after model construction and is never used to fit rules, membership functions or consequents.",
     "The external theoretical values validate agreement with the supplied analytical surface; they are not additional physical experiments.",
     "Intermediate-concentration surfaces are model predictions and have no independent experimental ground truth.",
