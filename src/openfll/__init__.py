@@ -49,7 +49,7 @@ def _backend_error_message() -> str:
         "openfll не смог загрузить внутренний backend `PyFLL` или его "
         "native module `PyFLL._core`.\n"
         "Проверьте, что пакет установлен из wheel, собранного вместе с "
-        "native backend: `pip install openfll`."
+        "native backend: `pip install openfll_python`."
         f"{reason}"
     )
 

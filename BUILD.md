@@ -1,125 +1,160 @@
-# Сборка wheel из исходников
+# Сборка и публикация OpenFLL Python
 
-Этот репозиторий **только для дистрибуции**. Исходники C++ находятся в
-закрытом репозитории [fuzzy-logic-library](https://github.com/SPARS-TUSUR/fuzzy-logic-library).
+Дистрибутив публикуется на PyPI под именем `openfll_python`. После установки
+пользователь импортирует пакет как `openfll`.
 
-## Автоматическая сборка (через GitHub Actions)
+Версия 0.2.0 поддерживает только:
 
-При каждом push тега `v*` (например, `v0.1.0`) workflow
-`.github/workflows/wheel.yml` собирает wheel для Python 3.14 (MinGW)
-и прикрепляет его к GitHub Release.
+- 64-разрядную Windows;
+- официальный CPython 3.14 с python.org;
+- wheel `cp314-cp314-win_amd64`.
+
+Исходники C++ находятся в закрытом репозитории
+[fuzzy-logic-library](https://github.com/SPARS-TUSUR/fuzzy-logic-library).
+В публичный wheel включается скомпилированный native backend `PyFLL._core`, но
+не исходный код закрытого репозитория. Source distribution (`sdist`) для этого
+релиза не публикуется.
+
+## Автоматическая сборка
+
+Workflow `.github/workflows/wheel.yml` поддерживает три сценария:
+
+1. Ручной запуск с `publish_target=none` — собрать и протестировать wheel, не
+   публикуя его.
+2. Ручной запуск с `publish_target=testpypi` — собрать, протестировать и
+   отправить wheel в TestPyPI.
+3. Публикация GitHub Release с тегом `v0.2.0` — собрать и протестировать wheel,
+   прикрепить его к GitHub Release и отправить в PyPI.
+
+Production-публикация не запускается от обычного push или pull request.
+Workflow сначала собирает wheel, затем устанавливает именно полученный файл в
+чистый CPython 3.14 и выполняет тесты. Только успешно проверенный artifact
+передаётся publishing-job.
+
+## Доступ к приватному backend
+
+Workflow клонирует `SPARS-TUSUR/fuzzy-logic-library` на зафиксированном commit
+`548edf353c797516fd8bbd3df7a7352a9ee176ac` из ветки `python/newpybind`. Это
+делает release-сборку воспроизводимой. Если стандартный `GITHUB_TOKEN` не имеет
+доступа к соседнему приватному репозиторию, в настройках `openfll-python` нужно
+создать Actions secret `OPENFLL_BACKEND_TOKEN`. Значением должен быть
+fine-grained token или GitHub App token с минимальным правом `Contents: read`
+для `fuzzy-logic-library`.
+
+## Trusted Publishing
+
+PyPI-токен в репозитории не хранится. Публикация использует GitHub OIDC и
+PyPI Trusted Publishing.
+
+Перед первым запуском необходимо:
+
+1. Создать GitHub Environments `testpypi` и `pypi`.
+2. Для environment `pypi` включить обязательное ручное подтверждение.
+3. В TestPyPI зарегистрировать pending publisher:
+   - project name: `openfll_python`;
+   - owner: `SPARS-TUSUR`;
+   - repository: `openfll-python`;
+   - workflow: `wheel.yml`;
+   - environment: `testpypi`.
+4. Повторить регистрацию на PyPI с environment `pypi`.
+
+PyPI нормализует подчёркивание в адресе проекта, поэтому страница будет иметь
+вид `https://pypi.org/project/openfll-python/`, а установить пакет можно как
+`pip install openfll_python` или `pip install openfll-python`.
 
 ## Модель поставки backend
 
-`PyFLL` не подключается как внешняя package dependency. Для ближайшего релиза
-он поставляется как внутренний backend package внутри того же wheel, что и
-`openfll`.
+`PyFLL` входит во wheel как внутренний пакет:
 
-Release-сборка временно собирает `PyFLL._core` из ветки
-`fuzzy-logic-library/python/newpybind`, потому что native `predict_batch`
-пока находится там до merge обратно в `python/pybind`.
-после чего копирует в `openfll-python/src/PyFLL/`:
+```text
+openfll -> PyFLL -> PyFLL._core -> OFLL::Linear::SugenoEngine
+```
 
-- `__init__.py` из backend source;
-- `PyFLL.pyi`;
-- `_core.<SOABI>.pyd`;
-- runtime `.dll`.
+Release workflow собирает backend с MSVC против официального CPython 3.14.
+Ожидаемое имя native-модуля — `_core.cp314-win_amd64.pyd`. Файл с MinGW/MSYS2
+ABI (`_core.cp314-mingw_*.pyd`) не является заменой: обычный CPython с
+python.org его не загружает. До сборки workflow применяет локальный
+`packaging/cpython-msvc.patch`: он добавляет в backend CMake корректное
+определение `libs` и ABI-суффикса для официального Windows CPython.
 
-Пользователь импортирует только `openfll`; цепочка исполнения остаётся
-`openfll -> PyFLL -> PyFLL._core`.
-
-Шаги:
-1. Сделать `git tag v0.1.0` и `git push origin v0.1.0`
-2. CI собирает wheel на `windows-latest` (MinGW GCC + MSYS2 Python 3.14)
-3. К каждому тегу автоматически создаётся GitHub Release с прикреплённым `.whl`
-
-## Ручная сборка (на Windows + MinGW)
+## Ручная сборка на Windows
 
 ### Требования
 
-- MinGW-w64 с GCC (через [MSYS2](https://www.msys2.org/))
-- CMake 3.30+, Ninja
-- Python 3.14 через MSYS2: `pacman -S mingw-w64-x86_64-python`
-- pybind11: `pacman -S mingw-w64-x86_64-pybind11`
-- NumPy для batch API: `pacman -S mingw-w64-x86_64-python-numpy`
-- cibuildwheel: `pip install cibuildwheel`
+- Visual Studio 2022 Build Tools с workload «Desktop development with C++»;
+- CMake 3.30+;
+- официальный 64-разрядный CPython 3.14;
+- доступ на чтение к приватному `fuzzy-logic-library`;
+- `python -m pip install --upgrade build twine pytest`.
 
-### Шаги
+### Сборка backend
 
-```bash
-# 1. Клонировать приватный OpenFLL рядом (или использовать submodule)
-git clone https://github.com/SPARS-TUSUR/fuzzy-logic-library.git ../fuzzy-logic-library
-git -C ../fuzzy-logic-library checkout python/newpybind
+```powershell
+git clone --branch python/newpybind --recurse-submodules `
+  https://github.com/SPARS-TUSUR/fuzzy-logic-library.git `
+  ..\fuzzy-logic-library
 
-# 2. Сконфигурировать и собрать C++ для MinGW-Python 3.14
-cd ../fuzzy-logic-library
-cmake -S . -B build_release -G Ninja \
-    -DCMAKE_BUILD_TYPE=Release \
-    -DCMAKE_C_COMPILER=gcc \
-    -DCMAKE_CXX_COMPILER=g++ \
-    -DPython3_EXECUTABLE=/mingw64/bin/python.exe
-cmake --build build_release -j 4 --target PyFLL
+$pythonExe = (Get-Command python).Source
 
-# 3. Скопировать внутренний backend package PyFLL в публичный wheel source
-rm -rf ../openfll-python/src/PyFLL
-mkdir -p ../openfll-python/src/PyFLL
-cp src/PyFLL/__init__.py ../openfll-python/src/PyFLL/
-cp build_release/src/PyFLL/PyFLL.pyi ../openfll-python/src/PyFLL/
-cp build_release/src/PyFLL/_core*.pyd ../openfll-python/src/PyFLL/
-cp build_release/src/PyFLL/*.dll ../openfll-python/src/PyFLL/ || true
+cmake `
+  -S ..\fuzzy-logic-library `
+  -B ..\fuzzy-logic-library\build_release `
+  -G "Visual Studio 17 2022" `
+  -A x64 `
+  -DPython3_EXECUTABLE="$pythonExe"
 
-# Скопировать Python runtime DLL рядом с PyFLL._core
-cp /mingw64/bin/libpython3.14.dll ../openfll-python/src/PyFLL/
-
-# 4. Собрать wheel
-cd ../openfll-python
-cibuildwheel --output-dir wheelhouse/ \
-    --build "cp314-*" \
-    --skip "*-musllinux_* *-manylinux_i686 pp*"
+cmake `
+  --build ..\fuzzy-logic-library\build_release `
+  --config Release `
+  --target PyFLL `
+  --parallel 4
 ```
 
-## Структура репозитория
+### Сборка wheel
 
+Команды выполняются из корня `openfll-python`:
+
+```powershell
+$backendBuild = "..\fuzzy-logic-library\build_release\src\PyFLL"
+$core = Get-ChildItem $backendBuild -Recurse `
+  -Filter "_core.cp314-win_amd64.pyd" | Select-Object -First 1
+$stub = Get-ChildItem $backendBuild -Recurse `
+  -Filter "PyFLL.pyi" | Select-Object -First 1
+
+if (-not $core -or -not $stub) {
+  throw "CPython 3.14 backend artifacts were not produced"
+}
+
+Remove-Item -LiteralPath "src\PyFLL" -Recurse -Force
+New-Item -ItemType Directory -Path "src\PyFLL" | Out-Null
+Copy-Item "..\fuzzy-logic-library\src\PyFLL\__init__.py" "src\PyFLL\"
+Copy-Item $stub.FullName "src\PyFLL\"
+Copy-Item $core.FullName "src\PyFLL\"
+
+python -m build --wheel --outdir wheelhouse
+$wheel = (Get-ChildItem "wheelhouse\*.whl").FullName
+python -m twine check $wheel
+python -m pip install --force-reinstall $wheel
+python -m pytest tests -v
 ```
-openfll-python/
-├── README.md              ← то, что видит пользователь на GitHub
-├── LICENSE                ← MIT
-├── BUILD.md               ← этот файл
-├── pyproject.toml         ← конфиг wheel + cibuildwheel
-├── src/
-│   ├── openfll/
-│       ├── __init__.py     ← runtime loader + стаб SugenoEngine
-│       └── __init__.pyi    ← type stubs для IDE
-│   └── PyFLL/              ← внутренний backend package, копируется при release
-│       ├── __init__.py
-│       ├── _core.*.pyd
-│       ├── PyFLL.pyi
-│       └── *.dll
-├── tests/
-│   └── test_backend_contract.py
-├── mkdocs.yml             ← конфиг документации
-├── docs/                  ← исходники документации (mkdocs)
-└── .github/
-    └── workflows/
-        ├── wheel.yml        ← сборка wheels
-        └── docs.yml         ← деплой GitHub Pages
+
+Ожидаемый файл:
+
+```text
+openfll_python-0.2.0-cp314-cp314-win_amd64.whl
 ```
 
-## Как опубликовать новую версию
+## Выпуск версии 0.2.0 после проверки
 
-1. Обновить `version` в `pyproject.toml`
-2. Обновить `src/openfll/__init__.pyi` если менялся API
-3. Обновить `docs/`
-4. `git tag v0.2.0 && git push origin v0.2.0`
-5. CI автоматически:
-   - Соберёт wheel (cp314)
-   - Создаст GitHub Release с wheel + `sdist` tarball
-   - Задеплоит docs на https://spars-tusur.github.io/openfll-python/
+Ветка с подготовкой релиза должна сначала пройти review и быть объединена с
+`main`. После этого:
 
-Пользователи увидят новую версию через `pip install --upgrade openfll`.
+1. Вручную запустить workflow с `publish_target=none`.
+2. После успешной сборки запустить его с `publish_target=testpypi`.
+3. Проверить установку из TestPyPI на Windows с CPython 3.14.
+4. Создать тег `v0.2.0` на проверенном commit из `main`.
+5. Создать и опубликовать GitHub Release для `v0.2.0`.
+6. Подтвердить deployment в GitHub Environment `pypi`.
 
-## Альтернатива: C++ исходники в публичном репо
-
-Если в будущем C++ код станет публичным (open-source лицензия), wheel-build
-упростится: cibuildwheel сможет собрать wheels прямо из исходников в этом же
-репо, без клонирования приватного.
+Повторно загрузить на PyPI файл с теми же именем и версией нельзя. Если после
+публикации потребуется исправление, необходимо выпустить новую версию.

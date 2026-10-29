@@ -1,19 +1,29 @@
 [build-system]
-requires = ["setuptools>=68", "wheel"]
+requires = ["setuptools>=77", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "openfll"
-version = "0.1.0"
+name = "openfll_python"
+version = "0.2.0"
 description = "Python bindings for OpenFLL fuzzy logic library"
 readme = "README.md"
-license = { text = "MIT" }
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [
-    { name = "SPARS-TUSUR", email = "support@example.com" },
+    { name = "SPARS-TUSUR" },
 ]
-requires-python = ">=3.14"
+requires-python = ">=3.14,<3.15"
 dependencies = [
     "numpy>=2.0",
+]
+keywords = ["fuzzy-logic", "sugeno", "openfll", "bindings"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Operating System :: Microsoft :: Windows",
+    "Programming Language :: C++",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Scientific/Engineering",
 ]
 
 [project.optional-dependencies]
@@ -24,19 +34,9 @@ test = [
     "pytest>=7.0",
     "scikit-learn>=1.3.0",
 ]
-keywords = ["fuzzy-logic", "sugeno", "openfll", "bindings"]
-classifiers = [
-    "Development Status :: 3 - Alpha",
-    "Intended Audience :: Science/Research",
-    "License :: OSI Approved :: MIT License",
-    "Operating System :: Microsoft :: Windows",
-    "Programming Language :: C++",
-    "Programming Language :: Python :: 3.14",
-    "Topic :: Scientific/Engineering",
-]
 
 [project.urls]
-"Source (private)" = "https://github.com/SPARS-TUSUR/fuzzy-logic-library"
+Source = "https://github.com/SPARS-TUSUR/openfll-python"
 Documentation = "https://spars-tusur.github.io/openfll-python/"
 Issues = "https://github.com/SPARS-TUSUR/openfll-python/issues"
 

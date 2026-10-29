@@ -1,0 +1,30 @@
+diff --git a/src/PyFLL/CMakeLists.txt b/src/PyFLL/CMakeLists.txt
+--- a/src/PyFLL/CMakeLists.txt
++++ b/src/PyFLL/CMakeLists.txt
+@@ -20,6 +20,6 @@ execute_process(
+ )
+ execute_process(
+-    COMMAND "${Python3_EXECUTABLE}" -c "import sysconfig; print(sysconfig.get_config_var('LIBDIR'))"
++    COMMAND "${Python3_EXECUTABLE}" -c "import os, sys, sysconfig; print(sysconfig.get_config_var('LIBDIR') or os.path.join(sys.base_prefix, 'libs'))"
+     OUTPUT_VARIABLE _PY_LIBDIR
+     OUTPUT_STRIP_TRAILING_WHITESPACE
+ )
+@@ -31,8 +31,8 @@ execute_process(
+ # SOABI нужен для корректного имени выходного файла .pyd
+ # (cp314-mingw_x86_64_msvcrt_gnu.pyd на MinGW, cp314-win_amd64.pyd на MSVC).
+ # Без него Python не находит _core.pyd при import.
+ execute_process(
+-    COMMAND "${Python3_EXECUTABLE}" -c "import sysconfig; print(sysconfig.get_config_var('SOABI'))"
++    COMMAND "${Python3_EXECUTABLE}" -c "import sysconfig; soabi = sysconfig.get_config_var('SOABI'); ext = sysconfig.get_config_var('EXT_SUFFIX') or ''; print(soabi or ext.removeprefix('.').removesuffix('.pyd'))"
+     OUTPUT_VARIABLE Python3_SOABI
+     OUTPUT_STRIP_TRAILING_WHITESPACE
+ )
+@@ -44,7 +44,7 @@ message(STATUS "PyFLL: cp${PY_TAG} include=${MinGW_PYTHON_INCDIR_CMAKE} libdir=${MinGW_PYTHON_LIBDIR_CMAKE}")
+ if(MSVC)
+     # MSVC-Python (python.org) поставляет python3.lib как основной import lib.
+     find_library(MinGW_PYTHON_LIB
+-        NAMES "python3.lib" "python${PY_TAG}.lib"
++        NAMES "python3" "python${PY_TAG}"
+         HINTS "${MinGW_PYTHON_LIBDIR_CMAKE}"
+         NO_DEFAULT_PATH
+     )
