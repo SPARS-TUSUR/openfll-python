@@ -39,7 +39,7 @@ jobs:
           ref: e49109aabdb37cadadb2cee487e9b6f39261f6fa
           path: fuzzy-logic-library
           submodules: recursive
-          token: ${{ secrets.OPENFLL_BACKEND_TOKEN || github.token }}
+          token: ${{ secrets.OPENFLL_BACKEND_TOKEN_SECRET || github.token }}
 
       - name: Set up CPython 3.14 x64
         uses: actions/setup-python@v6

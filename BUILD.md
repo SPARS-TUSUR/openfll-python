@@ -37,7 +37,7 @@ Workflow клонирует `SPARS-TUSUR/fuzzy-logic-library` на зафикс�
 `e49109aabdb37cadadb2cee487e9b6f39261f6fa` из ветки `python/pybind`. Это
 делает release-сборку воспроизводимой. Если стандартный `GITHUB_TOKEN` не имеет
 доступа к соседнему приватному репозиторию, в настройках `openfll-python` нужно
-создать Actions secret `OPENFLL_BACKEND_TOKEN`. Значением должен быть
+создать Actions secret `OPENFLL_BACKEND_TOKEN_SECRET`. Значением должен быть
 fine-grained token или GitHub App token с минимальным правом `Contents: read`
 для `fuzzy-logic-library`.
 
