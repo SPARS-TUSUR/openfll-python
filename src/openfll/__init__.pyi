@@ -3,6 +3,7 @@
 openfll — пользовательский пакет. Во время выполнения он делегирует работу
 внутреннему backend-пакету PyFLL, который загружает PyFLL._core.
 """
+from pathlib import Path
 from typing import Any, List, Literal, Mapping, Sequence, Tuple, Union, overload
 import numpy as np
 
@@ -50,6 +51,16 @@ def trapezoidal(a: float, b: float, c: float, d: float) -> List[float]:
 def gaussian(*, center: float, sigma: float) -> List[float]:
     """Вернуть params для gaussian membership function: [center, sigma]."""
     ...
+
+
+class MembershipPlot:
+    """Рисунок и оси, созданные для одной нечёткой переменной."""
+
+    variable_name: str
+    variable_type: Literal["input", "output"]
+    figure: Any
+    axes: Any
+    saved_path: Path | None
 
 
 class SugenoEngine:
@@ -200,6 +211,19 @@ class SugenoEngine:
         """
         ...
 
+    def plot_mf(
+        self,
+        variables: str | Sequence[str] | None = None,
+        *,
+        variable_type: Literal["all", "input", "output"] = "all",
+        num_points: int = 181,
+        ranges: Mapping[str, tuple[float, float]] | None = None,
+        show: bool = True,
+        save_dir: str | Path | None = None,
+    ) -> dict[str, MembershipPlot]:
+        """Построить графики MF для зарегистрированных переменных."""
+        ...
+
     def is_built(self) -> bool:
         """Вернуть True после успешного build()."""
         ...
@@ -209,6 +233,18 @@ class SugenoEngine:
 # Python-only helpers (submodule `openfll._helpers`).
 # Сигнатуры ниже — ручные type hints; runtime-импорт через `openfll.__init__`.
 # ============================================================================
+def plot_mf(
+    engine: SugenoEngine,
+    variables: str | Sequence[str] | None = None,
+    *,
+    variable_type: Literal["all", "input", "output"] = "all",
+    num_points: int = 181,
+    ranges: Mapping[str, tuple[float, float]] | None = None,
+    show: bool = True,
+    save_dir: str | Path | None = None,
+) -> dict[str, MembershipPlot]: ...
+
+
 def monte_carlo(
     engine: SugenoEngine,
     var_inputs: list[tuple[str, tuple[float, float]]],
