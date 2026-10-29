@@ -43,6 +43,13 @@ Thumbs.db
 .coverage
 htmlcov/
 
+# Reproducible detailed outputs from the fracture-toughness experiment
+experiments/fracture_toughness/results/model_definition.json
+experiments/fracture_toughness/results/training_predictions.csv
+experiments/fracture_toughness/results/surface_predictions.csv
+experiments/fracture_toughness/results/simpful_surface_sample.csv
+experiments/fracture_toughness/results/niihara_reference_predictions.csv
+
 # C++ extension binaries and MinGW runtime (built by CI)
 *.dll
 *.pyd
