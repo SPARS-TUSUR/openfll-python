@@ -48,6 +48,7 @@ jobs:
           architecture: x64
 
       - name: Set up UCRT64 GCC toolchain
+        id: msys2
         uses: msys2/setup-msys2@v2
         with:
           msystem: UCRT64
@@ -85,9 +86,11 @@ jobs:
 
       - name: Configure native backend with UCRT64 GCC
         shell: pwsh
+        env:
+          MSYS2_LOCATION: ${{ steps.msys2.outputs.msys2-location }}
         run: |
           $pythonExe = (Get-Command python).Source
-          $ucrtBin = "C:/msys64/ucrt64/bin"
+          $ucrtBin = Join-Path $env:MSYS2_LOCATION "ucrt64/bin"
           & "$ucrtBin/cmake.exe" `
             -S fuzzy-logic-library `
             -B fuzzy-logic-library/build_release `
@@ -101,9 +104,11 @@ jobs:
 
       - name: Build and test C++ core and native backend
         shell: pwsh
+        env:
+          MSYS2_LOCATION: ${{ steps.msys2.outputs.msys2-location }}
         run: |
-          $ucrtBin = "C:/msys64/ucrt64/bin"
-          $env:Path = "C:\msys64\ucrt64\bin;$env:Path"
+          $ucrtBin = Join-Path $env:MSYS2_LOCATION "ucrt64/bin"
+          $env:Path = "$ucrtBin;$env:Path"
           & "$ucrtBin/cmake.exe" `
             --build fuzzy-logic-library/build_release `
             --target unit_tests PyFLL `
