@@ -38,6 +38,7 @@ test = [
     "scikit-learn>=1.3.0",
     "openpyxl>=3.1,<4",
     "matplotlib>=3.8",
+    "simpful==2.12.0",
 ]
 
 [project.urls]
@@ -70,7 +71,7 @@ include = ["openfll*", "PyFLL*"]
 # cibuildwheel — сборка wheels для разных Python
 # ============================================================================
 [tool.cibuildwheel]
-# Собирать для Windows, только cp314 (MinGW-Python 3.14).
+# Собирать для Windows, только официальный CPython 3.14 x64.
 build = "cp314-*"
 skip = "*-musllinux_* *-manylinux_i686 pp*"
 build-frontend = { name = "build", args = ["--wheel"] }
@@ -78,7 +79,7 @@ build-frontend = { name = "build", args = ["--wheel"] }
 # C++ часть собирается отдельным job-ом (см. .github/workflows/wheel.yml),
 # а backend package PyFLL копируется в src/PyFLL/ перед запуском cibuildwheel.
 # Test the wheels by importing openfll and running a smoke test.
-test-requires = ["pytest", "numpy", "scikit-learn", "openpyxl>=3.1,<4", "matplotlib>=3.8"]
+test-requires = ["pytest", "numpy", "scikit-learn", "openpyxl>=3.1,<4", "matplotlib>=3.8", "simpful==2.12.0"]
 test-command = "pytest {project}/tests -v"
 
 [tool.cibuildwheel.overrides]

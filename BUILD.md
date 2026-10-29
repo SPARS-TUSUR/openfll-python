@@ -34,7 +34,7 @@ Workflow сначала собирает wheel, затем устанавлив�
 ## Доступ к приватному backend
 
 Workflow клонирует `SPARS-TUSUR/fuzzy-logic-library` на зафиксированном commit
-`548edf353c797516fd8bbd3df7a7352a9ee176ac` из ветки `python/newpybind`. Это
+`e49109aabdb37cadadb2cee487e9b6f39261f6fa` из ветки `python/pybind`. Это
 делает release-сборку воспроизводимой. Если стандартный `GITHUB_TOKEN` не имеет
 доступа к соседнему приватному репозиторию, в настройках `openfll-python` нужно
 создать Actions secret `OPENFLL_BACKEND_TOKEN`. Значением должен быть
@@ -70,19 +70,20 @@ PyPI нормализует подчёркивание в адресе прое�
 openfll -> PyFLL -> PyFLL._core -> OFLL::Linear::SugenoEngine
 ```
 
-Release workflow собирает backend с MSVC против официального CPython 3.14.
-Ожидаемое имя native-модуля — `_core.cp314-win_amd64.pyd`. Файл с MinGW/MSYS2
-ABI (`_core.cp314-mingw_*.pyd`) не является заменой: обычный CPython с
-python.org его не загружает. До сборки workflow применяет локальный
-`packaging/cpython-msvc.patch`: он добавляет в backend CMake корректное
-определение `libs` и ABI-суффикса для официального Windows CPython.
+Release workflow собирает backend компилятором UCRT64 GCC против официального
+CPython 3.14 с python.org. Ожидаемое имя native-модуля —
+`_core.cp314-win_amd64.pyd`. Компилятор берётся из MSYS2, но ABI и имя модуля —
+от официального CPython, поэтому wheel устанавливается обычным Windows Python.
+Файл с MSYS2 Python ABI (`_core.cp314-mingw_*.pyd`) не является заменой.
+До сборки workflow применяет локальный `packaging/cpython-windows.patch`: он
+добавляет в backend CMake корректное определение `libs` и ABI-суффикса для
+официального Windows CPython.
 
 ## Ручная сборка на Windows
 
 ### Требования
 
-- Visual Studio 2022 Build Tools с workload «Desktop development with C++»;
-- CMake 3.30+;
+- MSYS2 UCRT64 с GCC, CMake и Ninja;
 - официальный 64-разрядный CPython 3.14;
 - доступ на чтение к приватному `fuzzy-logic-library`;
 - `python -m pip install --upgrade build twine pytest`.
@@ -90,24 +91,34 @@ python.org его не загружает. До сборки workflow приме
 ### Сборка backend
 
 ```powershell
-git clone --branch python/newpybind --recurse-submodules `
+git clone --branch python/pybind --recurse-submodules `
   https://github.com/SPARS-TUSUR/fuzzy-logic-library.git `
   ..\fuzzy-logic-library
+git -C ..\fuzzy-logic-library checkout e49109aabdb37cadadb2cee487e9b6f39261f6fa
+$patchFile = (Resolve-Path .\packaging\cpython-windows.patch).Path
+git -C ..\fuzzy-logic-library apply $patchFile
 
 $pythonExe = (Get-Command python).Source
+$ucrtBin = "C:\msys64\ucrt64\bin"
 
-cmake `
+& "$ucrtBin\cmake.exe" `
   -S ..\fuzzy-logic-library `
   -B ..\fuzzy-logic-library\build_release `
-  -G "Visual Studio 17 2022" `
-  -A x64 `
-  -DPython3_EXECUTABLE="$pythonExe"
+  -G Ninja `
+  -DCMAKE_BUILD_TYPE=Release `
+  -DCMAKE_C_COMPILER="$ucrtBin\gcc.exe" `
+  -DCMAKE_CXX_COMPILER="$ucrtBin\g++.exe" `
+  -DCMAKE_MAKE_PROGRAM="$ucrtBin\ninja.exe" `
+  -DPython3_EXECUTABLE="$pythonExe" `
+  -DOPENFLL_BUILD_BENCHMARKS=OFF
 
-cmake `
+& "$ucrtBin\cmake.exe" `
   --build ..\fuzzy-logic-library\build_release `
-  --config Release `
-  --target PyFLL `
+  --target unit_tests PyFLL `
   --parallel 4
+
+$env:Path = "$ucrtBin;$env:Path"
+& ..\fuzzy-logic-library\build_release\tests\unit_tests.exe --gtest_brief=1
 ```
 
 ### Сборка wheel
@@ -130,11 +141,15 @@ New-Item -ItemType Directory -Path "src\PyFLL" | Out-Null
 Copy-Item "..\fuzzy-logic-library\src\PyFLL\__init__.py" "src\PyFLL\"
 Copy-Item $stub.FullName "src\PyFLL\"
 Copy-Item $core.FullName "src\PyFLL\"
+Get-ChildItem $core.DirectoryName -Filter "*.dll" |
+  Copy-Item -Destination "src\PyFLL\"
 
 python -m build --wheel --outdir wheelhouse
 $wheel = (Get-ChildItem "wheelhouse\*.whl").FullName
 python -m twine check $wheel
 python -m pip install --force-reinstall $wheel
+python -m pip install "pytest>=7.0" "scikit-learn>=1.3.0" `
+  "openpyxl>=3.1,<4" "matplotlib>=3.8" "simpful==2.12.0"
 python -m pytest tests -v
 ```
 
