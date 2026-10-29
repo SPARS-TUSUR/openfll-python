@@ -36,7 +36,7 @@ axes = plots["x1"].axes
 
 Если `ranges` не передан, диапазон каждой оси определяется из параметров её
 triangular, trapezoidal и gaussian функций. Matplotlib подключается только при
-вызове; установите extra `openfll[plot]`.
+вызове; установите extra `openfll_python[plot]`.
 
 ## Scalar predict
 

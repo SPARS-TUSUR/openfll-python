@@ -9,7 +9,7 @@
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)]()
 [![Python](https://img.shields.io/badge/python-3.14-blue.svg)]()
 [![Platform](https://img.shields.io/badge/platform-Windows-lightgrey.svg)]()
-[![Tests](https://img.shields.io/badge/tests-72%20passed-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/tests-90%20passed-brightgreen.svg)]()
 
 ---
 
@@ -87,7 +87,7 @@ y_batch = e.predict(X)  # вычисляется за ~9 мс в нативно�
 Установите опциональную зависимость для графиков:
 
 ```bash
-pip install "openfll[plot]"
+pip install "openfll_python[plot]"
 ```
 
 После регистрации функций принадлежности вызовите `plot_mf`. По умолчанию

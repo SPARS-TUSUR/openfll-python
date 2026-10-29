@@ -14,7 +14,7 @@
 
 ## 2. Анализ математической реализации в C++ OpenFLL
 
-Аудит исходного кода C++ в репозитории `fuzzy-logic-library` (ветка `python/newpybind`) показал:
+Аудит исходного кода C++ в репозитории `fuzzy-logic-library` (ветка `python/pybind`) показал:
 
 ### 2.1. Дефаззификатор
 В классе `SugenoBuilder` ([`sugeno_builder.h`](file:///c:/Users/matve/Desktop/ГПОC++/fuzzy-logic-library/src/OpenFLL/models/sugeno/sugeno_builder.h)) модель Sugeno безальтернативно конфигурируется с использованием взвешенного среднего — `WtaverDefuzzer` ([`wtaver_defuzzer.h`](file:///c:/Users/matve/Desktop/ГПОC++/fuzzy-logic-library/src/OpenFLL/models/sugeno/defuzz/wtaver_defuzzer.h)):

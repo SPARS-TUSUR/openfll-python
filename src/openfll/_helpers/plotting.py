@@ -196,7 +196,7 @@ def plot_mf(
         import matplotlib.pyplot as plt
     except ImportError as error:
         raise RuntimeError(
-            "plot_mf requires matplotlib; install it with `pip install openfll[plot]`"
+            "plot_mf requires matplotlib; install it with `pip install openfll_python[plot]`"
         ) from error
 
     roles = _VARIABLE_ROLES.get(engine, {})

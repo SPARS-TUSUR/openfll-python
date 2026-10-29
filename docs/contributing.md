@@ -29,9 +29,9 @@ pip install -e .[test]             # редактируемая установк
 pytest tests/                      # если есть pytest-тесты
 ```
 
-Wheel `cp314-cp314-win_amd64` собирается с MSVC в GitHub Actions — см.
+Wheel `cp314-cp314-win_amd64` собирается UCRT64 GCC в GitHub Actions — см.
 `.github/workflows/wheel.yml`. Локальная release-сборка требует Windows,
-MSVC 2022 и официальный CPython 3.14.
+MSYS2 UCRT64 и официальный CPython 3.14.
 
 ## Поправить документацию
 
