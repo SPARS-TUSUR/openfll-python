@@ -14,8 +14,16 @@ from __future__ import annotations
 
 import importlib
 from collections.abc import Mapping, Sequence
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 from weakref import WeakKeyDictionary
+
+from ._helpers.plotting import (
+    MembershipPlot,
+    _register_membership_function,
+    _register_variable,
+    plot_mf,
+)
 
 try:
     import numpy as _np
@@ -31,6 +39,8 @@ __all__ = [
     "triangular",
     "trapezoidal",
     "gaussian",
+    "MembershipPlot",
+    "plot_mf",
 ]
 
 _BACKEND_IMPORT_ERROR: BaseException | None = None
@@ -93,6 +103,7 @@ def _install_scalar_predict(engine_cls: type) -> None:
     required_methods = (
         "add_input_var",
         "add_output_var",
+        "add_membership_func",
         "set_input",
         "calculate",
         "get_output",
@@ -104,14 +115,27 @@ def _install_scalar_predict(engine_cls: type) -> None:
 
     native_add_input_var = engine_cls.add_input_var
     native_add_output_var = engine_cls.add_output_var
+    native_add_membership_func = engine_cls.add_membership_func
 
     def add_input_var(self, name: str) -> None:
         native_add_input_var(self, name)
         _ENGINE_INPUT_NAMES.setdefault(self, []).append(name)
+        _register_variable(self, name, "input")
 
     def add_output_var(self, name: str) -> None:
         native_add_output_var(self, name)
         _ENGINE_OUTPUT_NAMES.setdefault(self, []).append(name)
+        _register_variable(self, name, "output")
+
+    def add_membership_func(
+        self,
+        var_name: str,
+        mf_name: str,
+        type: str,
+        params: Sequence[float],
+    ) -> None:
+        native_add_membership_func(self, var_name, mf_name, type, params)
+        _register_membership_function(self, var_name, mf_name, type, params)
 
     def _is_bool(val: Any) -> bool:
         if isinstance(val, bool):
@@ -353,9 +377,32 @@ def _install_scalar_predict(engine_cls: type) -> None:
             f"inputs must be a mapping, scalar number, sequence, or numpy ndarray, got {type(inputs).__name__}"
         )
 
+    def plot_membership_functions(
+        self,
+        variables: str | Sequence[str] | None = None,
+        *,
+        variable_type: Literal["all", "input", "output"] = "all",
+        num_points: int = 181,
+        ranges: Mapping[str, tuple[float, float]] | None = None,
+        show: bool = True,
+        save_dir: str | Path | None = None,
+    ) -> dict[str, MembershipPlot]:
+        """Построить функции принадлежности, зарегистрированные в движке."""
+        return plot_mf(
+            self,
+            variables,
+            variable_type=variable_type,
+            num_points=num_points,
+            ranges=ranges,
+            show=show,
+            save_dir=save_dir,
+        )
+
     engine_cls.add_input_var = add_input_var
     engine_cls.add_output_var = add_output_var
+    engine_cls.add_membership_func = add_membership_func
     engine_cls.predict = predict
+    engine_cls.plot_mf = plot_membership_functions
     engine_cls._openfll_predict_installed = True
 
 

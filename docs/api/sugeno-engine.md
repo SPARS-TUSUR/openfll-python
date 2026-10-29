@@ -21,6 +21,7 @@
         - set_input
         - get_output
         - calculate
+        - plot_mf
         - is_built
       show_source: false
       heading_level: 2

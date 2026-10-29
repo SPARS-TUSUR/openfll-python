@@ -66,6 +66,8 @@ def test_openfll_keeps_public_symbols_with_backend(tmp_path, monkeypatch):
     assert hasattr(openfll, "monte_carlo")
     assert hasattr(openfll, "grid_2d")
     assert hasattr(openfll, "check_output_finite")
+    assert hasattr(openfll, "plot_mf")
+    assert hasattr(openfll, "MembershipPlot")
     assert set(openfll.__all__) == {
         "SugenoEngine",
         "MfType",
@@ -78,6 +80,8 @@ def test_openfll_keeps_public_symbols_with_backend(tmp_path, monkeypatch):
         "monte_carlo",
         "grid_2d",
         "check_output_finite",
+        "plot_mf",
+        "MembershipPlot",
     }
 
 
