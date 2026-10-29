@@ -27,16 +27,16 @@
 CPython 3.14:
 
 ```powershell
-py -3.14 -m pip install openfll_python
+py -3.14 -m pip install openfll-python
 ```
 
 Поддержка scikit-learn устанавливается дополнительной группой зависимостей:
 
 ```powershell
-py -3.14 -m pip install "openfll_python[sklearn]"
+py -3.14 -m pip install "openfll-python[sklearn]"
 ```
 
-`openfll_python` — имя дистрибутива на PyPI. Имя импортируемого Python-пакета
+`openfll-python` — имя дистрибутива на PyPI. Имя импортируемого Python-пакета
 остаётся `openfll`:
 
 ```python
@@ -87,7 +87,7 @@ y_batch = e.predict(X)  # вычисляется за ~9 мс в нативно�
 Установите опциональную зависимость для графиков:
 
 ```bash
-pip install "openfll_python[plot]"
+pip install "openfll-python[plot]"
 ```
 
 После регистрации функций принадлежности вызовите `plot_mf`. По умолчанию
