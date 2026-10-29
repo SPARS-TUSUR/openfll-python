@@ -1,100 +1,218 @@
-name: Build wheels
+name: Build and publish wheel
 
-# Сборка wheel для Python 3.14 (MinGW-build) через cibuildwheel.
-# Триггеры:
-#   - workflow_dispatch: ручной запуск
-#   - push в main: после тега — для GitHub Release
-#   - release: опубликованный GitHub Release — собрать и прикрепить wheel
-
+# Production publication happens only for a published GitHub Release.
+# A manual run can either build the wheel without publishing it or upload it
+# to TestPyPI. PyPI authentication uses Trusted Publishing (OIDC), so no
+# long-lived PyPI token is stored in GitHub.
 on:
   workflow_dispatch:
-  push:
-    tags:
-      - "v*"
+    inputs:
+      publish_target:
+        description: Optional package index for a manual test release
+        required: true
+        default: none
+        type: choice
+        options:
+          - none
+          - testpypi
   release:
     types: [published]
 
 jobs:
-  build_wheels:
-    name: Build on Python 3.14
+  build_wheel:
+    name: Build and test Windows / CPython 3.14 wheel
     runs-on: windows-latest
+    permissions:
+      contents: read
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Python package
+        uses: actions/checkout@v4
         with:
-          submodules: recursive
+          persist-credentials: false
 
-      - name: Checkout backend
+      - name: Checkout private C++ backend
         uses: actions/checkout@v4
         with:
           repository: SPARS-TUSUR/fuzzy-logic-library
-          # Native predict_batch находится в
-          # python/newpybind до merge обратно в python/pybind.
-          ref: python/newpybind
+          # Pin the reviewed backend revision so release builds are reproducible.
+          ref: 548edf353c797516fd8bbd3df7a7352a9ee176ac
           path: fuzzy-logic-library
           submodules: recursive
+          token: ${{ secrets.OPENFLL_BACKEND_TOKEN || github.token }}
 
-      - uses: msys2/setup-msys2@v2
+      - name: Set up CPython 3.14 x64
+        uses: actions/setup-python@v6
         with:
-          msystem: MINGW64
-          update: true
-          install: >-
-            git
-            base-devel
-            mingw-w64-x86_64-toolchain
-            mingw-w64-x86_64-cmake
-            mingw-w64-x86_64-ninja
-            mingw-w64-x86_64-python
-            mingw-w64-x86_64-pybind11
-            mingw-w64-x86_64-ccache
+          python-version: "3.14"
+          architecture: x64
 
-      - name: Build C++ extension
-        shell: bash
+      - name: Apply CPython/MSVC packaging compatibility patch
+        shell: pwsh
         run: |
-          set -e
-          PYTHON_EXE=/mingw64/bin/python.exe
-          echo "Using Python: $PYTHON_EXE"
-          cmake -S fuzzy-logic-library -B fuzzy-logic-library/build_release -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_C_COMPILER=gcc \
-            -DCMAKE_CXX_COMPILER=g++ \
-            -DPython3_EXECUTABLE="$PYTHON_EXE"
-          cmake --build fuzzy-logic-library/build_release -j 4 --target PyFLL
-          # Проверяем, что native backend artifact создан
-          ls -la fuzzy-logic-library/build_release/src/PyFLL/
+          git -C fuzzy-logic-library apply --check ../packaging/cpython-msvc.patch
+          git -C fuzzy-logic-library apply ../packaging/cpython-msvc.patch
 
-      - name: Copy PyFLL backend package
-        shell: bash
+      - name: Validate release metadata
+        shell: pwsh
         run: |
-          rm -rf src/PyFLL
-          mkdir -p src/PyFLL
-          cp fuzzy-logic-library/src/PyFLL/__init__.py src/PyFLL/
-          cp fuzzy-logic-library/build_release/src/PyFLL/PyFLL.pyi src/PyFLL/
-          cp fuzzy-logic-library/build_release/src/PyFLL/_core*.pyd src/PyFLL/
-          cp fuzzy-logic-library/build_release/src/PyFLL/*.dll src/PyFLL/ || true
-          # Копируем Python runtime DLL рядом с PyFLL._core, остальные DLL уже
-          # копирует backend CMake при MinGW-сборке.
-          cp /mingw64/bin/libpython3.14.dll src/PyFLL/
-          ls -la src/PyFLL/
+          $projectName = python -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['name'])"
+          $version = python -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])"
 
-      - name: Build wheel with cibuildwheel
-        shell: bash
+          if ($projectName -ne "openfll_python") {
+            throw "Unexpected distribution name: $projectName"
+          }
+
+          if ("${{ github.event_name }}" -eq "release") {
+            $expectedTag = "v$version"
+            $actualTag = "${{ github.event.release.tag_name }}"
+            if ($actualTag -ne $expectedTag) {
+              throw "Release tag $actualTag does not match package version $version (expected $expectedTag)."
+            }
+          }
+
+      - name: Configure native backend with MSVC
+        shell: pwsh
         run: |
-          pip install cibuildwheel
-          cibuildwheel --output-dir wheelhouse/ \
-            --build "cp314-*" \
-            --skip "*-musllinux_* *-manylinux_i686 pp*" \
-            -e "OPENFLL_PYTHON=3.14" \
-            .
+          $pythonExe = (Get-Command python).Source
+          cmake `
+            -S fuzzy-logic-library `
+            -B fuzzy-logic-library/build_release `
+            -G "Visual Studio 17 2022" `
+            -A x64 `
+            -DPython3_EXECUTABLE="$pythonExe"
 
-      - name: Upload wheels as artifact
+      - name: Build native backend
+        shell: pwsh
+        run: |
+          cmake `
+            --build fuzzy-logic-library/build_release `
+            --config Release `
+            --target PyFLL `
+            --parallel 4
+
+      - name: Assemble bundled PyFLL backend package
+        shell: pwsh
+        run: |
+          $buildRoot = "fuzzy-logic-library/build_release/src/PyFLL"
+          $core = Get-ChildItem $buildRoot -Recurse -Filter "_core.cp314-win_amd64.pyd" |
+            Select-Object -First 1
+          $stub = Get-ChildItem $buildRoot -Recurse -Filter "PyFLL.pyi" |
+            Select-Object -First 1
+
+          if (-not $core) {
+            throw "CPython 3.14 win_amd64 backend was not produced."
+          }
+          if (-not $stub) {
+            throw "PyFLL.pyi was not produced."
+          }
+
+          Remove-Item -LiteralPath "src/PyFLL" -Recurse -Force -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Path "src/PyFLL" | Out-Null
+          Copy-Item "fuzzy-logic-library/src/PyFLL/__init__.py" "src/PyFLL/"
+          Copy-Item $stub.FullName "src/PyFLL/"
+          Copy-Item $core.FullName "src/PyFLL/"
+
+          Get-ChildItem $core.DirectoryName -Filter "*.dll" -ErrorAction SilentlyContinue |
+            Copy-Item -Destination "src/PyFLL/"
+          Get-ChildItem "src/PyFLL"
+
+      - name: Build wheel
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade build twine
+          python -m build --wheel --outdir wheelhouse
+
+      - name: Validate wheel metadata
+        shell: pwsh
+        run: |
+          $wheel = Get-ChildItem "wheelhouse/*.whl"
+          if ($wheel.Count -ne 1) {
+            throw "Expected exactly one wheel, found $($wheel.Count)."
+          }
+          if ($wheel.Name -notmatch '^openfll_python-0\.2\.0-cp314-cp314-win_amd64\.whl$') {
+            throw "Unexpected wheel name: $($wheel.Name)"
+          }
+          python -m twine check $wheel.FullName
+
+      - name: Install and test built wheel
+        shell: pwsh
+        run: |
+          $wheel = (Get-ChildItem "wheelhouse/*.whl").FullName
+          python -m pip install --force-reinstall $wheel
+          python -m pip install "pytest>=7.0" "scikit-learn>=1.3.0"
+          python -m pytest tests -v
+          python -c "from importlib.metadata import version; assert version('openfll_python') == '0.2.0'"
+          python -c "import openfll, PyFLL; assert PyFLL.SugenoEngine.__module__ == 'PyFLL._core'"
+
+      - name: Upload wheel artifact
         uses: actions/upload-artifact@v4
         with:
-          name: wheels-py314
+          name: openfll-python-0.2.0-cp314-win-amd64
           path: wheelhouse/*.whl
+          if-no-files-found: error
+          retention-days: 14
 
-      - name: Attach to GitHub Release
-        if: github.event_name == 'release'
+  attach_release_assets:
+    name: Attach wheel to GitHub Release
+    if: github.event_name == 'release' && github.event.action == 'published'
+    needs: build_wheel
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download wheel artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: openfll-python-0.2.0-cp314-win-amd64
+          path: dist
+
+      - name: Attach wheel
         uses: softprops/action-gh-release@v2
         with:
-          files: wheelhouse/*.whl
+          files: dist/*.whl
+
+  publish_testpypi:
+    name: Publish wheel to TestPyPI
+    if: github.event_name == 'workflow_dispatch' && inputs.publish_target == 'testpypi'
+    needs: build_wheel
+    runs-on: ubuntu-latest
+    environment:
+      name: testpypi
+      url: https://test.pypi.org/p/openfll-python
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Download wheel artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: openfll-python-0.2.0-cp314-win-amd64
+          path: dist
+
+      - name: Publish to TestPyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+          skip-existing: true
+
+  publish_pypi:
+    name: Publish wheel to PyPI
+    if: github.event_name == 'release' && github.event.action == 'published'
+    needs: build_wheel
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/openfll-python
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Download wheel artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: openfll-python-0.2.0-cp314-win-amd64
+          path: dist
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1

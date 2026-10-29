@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/assets/openfll-logo.png" alt="OpenFLL — Open Fuzzy Logic Library" width="320">
+  <img src="https://raw.githubusercontent.com/SPARS-TUSUR/openfll-python/main/docs/assets/openfll-logo.png" alt="OpenFLL — Open Fuzzy Logic Library" width="320">
 </p>
 
 # openfll-python
@@ -7,9 +7,9 @@
 **Python биндинги и библиотека машинного обучения для OpenFLL** (высокопроизводительное C++ ядро нечёткой логики).
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)]()
-[![Python](https://img.shields.io/badge/python-3.14%20%7C%203.12-blue.svg)]()
+[![Python](https://img.shields.io/badge/python-3.14-blue.svg)]()
 [![Platform](https://img.shields.io/badge/platform-Windows-lightgrey.svg)]()
-[![Tests](https://img.shields.io/badge/tests-66%20passed-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/tests-72%20passed-brightgreen.svg)]()
 
 ---
 
@@ -18,6 +18,30 @@
 `openfll` — Python-обёртка над [OpenFLL](https://github.com/SPARS-TUSUR/fuzzy-logic-library), предоставляющая два согласованных уровня работы:
 1. **Низкоуровневый императивный движок (`openfll.SugenoEngine`)**: прямое управление нечёткой моделью Сугено нулевого порядка, регистрация функций принадлежности, текстовые и кортежные правила, явные t-нормы и нативный C++ батч-инференс со скоростью **более 11 млн сэмплов в секунду**.
 2. **Scikit-Learn регрессор (`openfll.sklearn.SugenoRegressor`)**: полноценный эстимейтор машинного обучения, реализующий алгоритм обучения констант заключений правил методом наименьших квадратов (МНК / Ridge), совместимый с `clone()`, `cross_val_score()`, `GridSearchCV()` и пайплайнами.
+
+---
+
+## Установка
+
+Версия 0.2.0 распространяется как бинарный wheel для 64-разрядной Windows и
+CPython 3.14:
+
+```powershell
+py -3.14 -m pip install openfll_python
+```
+
+Поддержка scikit-learn устанавливается дополнительной группой зависимостей:
+
+```powershell
+py -3.14 -m pip install "openfll_python[sklearn]"
+```
+
+`openfll_python` — имя дистрибутива на PyPI. Имя импортируемого Python-пакета
+остаётся `openfll`:
+
+```python
+import openfll
+```
 
 ---
 
@@ -178,8 +202,7 @@ $$y = A(X) \cdot c, \quad A_{i, r} = \bar{w}_r(x_i)$$
 ## Документация в формате DOCX
 
 Сгенерирована подробная иллюстрированная академическая документация по проекту:
-* [`Документация_OpenFLL_Python_API.docx`](file:///c:/Users/matve/Desktop/ГПОAPI/Документация_OpenFLL_Python_API.docx) (в корне `ГПОAPI`)
-* `docs/Документация_OpenFLL_Python_API.docx` (в репозитории `openfll-python`)
+* [`Документация_OpenFLL_Python_API.docx`](https://github.com/SPARS-TUSUR/openfll-python/blob/main/docs/Документация_OpenFLL_Python_API.docx)
 
 Документ содержит подробный архитектурный анализ, математические доказательства, результаты замеров производительности, 5 встроенных графиков высокого разрешения, таблицы параметров и руководство пользователя.
 

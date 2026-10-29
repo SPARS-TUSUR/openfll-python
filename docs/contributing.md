@@ -21,17 +21,17 @@
 ## Запустить тесты локально
 
 ```bash
-pip install openfll                # для smoke-теста API
+pip install openfll_python         # для smoke-теста API
 python -c "import openfll; e = openfll.SugenoEngine(); e.build()"  # проверка загрузки
 
 # Для разработки самого пакета (после git clone):
-pip install -e .[dev]              # редактируемая установка
+pip install -e .[test]             # редактируемая установка с тестовыми зависимостями
 pytest tests/                      # если есть pytest-тесты
 ```
 
-Wheel под `cp314-cp314-win_amd64` и `cp314-cp314-mingw_x86_64_msvcrt_gnu` собирается
-через `cibuildwheel` в GitHub Actions — см. `.github/workflows/wheel.yml`.
-Локальная сборка требует MSVC 2022 (Windows) или GCC 14+ (Linux).
+Wheel `cp314-cp314-win_amd64` собирается с MSVC в GitHub Actions — см.
+`.github/workflows/wheel.yml`. Локальная release-сборка требует Windows,
+MSVC 2022 и официальный CPython 3.14.
 
 ## Поправить документацию
 
