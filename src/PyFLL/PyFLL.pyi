@@ -11,6 +11,7 @@ Source of truth:
 When you change the C++ binding, please update this file to match.
 """
 from typing import Any, List, Literal, Sequence, Tuple, Union
+from pathlib import Path
 
 # ============================================================================
 # Literal type aliases — for IDE autocomplete on string-enum parameters
@@ -50,6 +51,12 @@ SNorms = Literal[
 # SugenoEngine — the main public class
 # ============================================================================
 
+class IModel:
+    def calculate(self) -> None: ...
+    def save_to_string(self) -> str: ...
+    def save_to_file(self, path: str | Path) -> None: ...
+    def to_dict(self) -> dict[str, Any]: ...
+
 class SugenoEngine:
     """Linear facade for Sugeno fuzzy logic model.
 
@@ -67,6 +74,12 @@ class SugenoEngine:
 
     Threading: instances are NOT thread-safe. Use one engine per thread.
     """
+
+    def model_ref(self) -> IModel: ...
+    def set_defuzzer(self, name: Literal["wtaver", "wtsum", "centroid"]) -> None: ...
+    def find_belonging(self, mf_name: str, value: float) -> float: ...
+    def get_input_var_names(self) -> list[str]: ...
+    def get_output_var_names(self) -> list[str]: ...
 
     def __init__(self) -> None:
         """Create an empty Sugeno engine."""
@@ -122,7 +135,7 @@ class SugenoEngine:
 
         Raises:
             ValueError: bad type or wrong parameter count, duplicate mf_name.
-            KeyError: var_name is not registered.
+            IndexError: var_name is not registered.
             RuntimeError: called after build().
         """
         ...
@@ -146,7 +159,7 @@ class SugenoEngine:
 
         Raises:
             ValueError: syntax error or unknown norm name.
-            KeyError: a variable or MF name is unknown.
+            IndexError: a variable or MF name is unknown.
             RuntimeError: called after build().
         """
         ...
@@ -190,7 +203,7 @@ class SugenoEngine:
         Raises:
             ValueError: empty antecedent, wrong consequent size, unknown
                 variable/MF, or unknown norm.
-            KeyError: a variable or MF is unknown.
+            IndexError: a variable or MF is unknown.
             RuntimeError: called after build().
         """
         ...
@@ -245,7 +258,7 @@ class SugenoEngine:
             value: new crisp value.
 
         Raises:
-            KeyError: name is not a registered input variable.
+            IndexError: name is not a registered input variable.
             RuntimeError: called before build().
         """
         ...
@@ -259,7 +272,7 @@ class SugenoEngine:
             Crisp output value (defuzzified for Mamdani, weighted sum for Sugeno).
 
         Raises:
-            KeyError: name is not a registered output variable.
+            IndexError: name is not a registered output variable.
             RuntimeError: called before build().
         """
         ...
@@ -292,7 +305,7 @@ class SugenoEngine:
                 is not a sequence of strings.
             ValueError: wrong shape, name/feature count mismatch, duplicate
                 names, or incomplete input_names.
-            KeyError: an input name is unknown.
+            IndexError: an input name is unknown.
             RuntimeError: called before build() or unsupported output config.
         """
         ...
@@ -304,3 +317,78 @@ class SugenoEngine:
     def is_built(self) -> bool:
         """Return True if build() has been called successfully."""
         ...
+
+    # ------------------------------------------------------------------------
+    # Serialization
+    # ------------------------------------------------------------------------
+
+    def save_to_string(self) -> str:
+        """Serialize the built model to a JSON string.
+
+        The JSON keeps the model structure — variables, membership functions
+        and rules — but not the current input values.
+
+        Raises:
+            RuntimeError: called before build().
+        """
+        ...
+
+    def save_to_file(self, path: str | Path) -> None:
+        """Serialize the built model to a JSON file.
+
+        Args:
+            path: destination file. An existing file is overwritten.
+
+        Raises:
+            RuntimeError: called before build().
+            OSError: the file could not be written.
+        """
+        ...
+
+    def to_dict(self) -> Any:
+        """Return the serialized model as a plain Python dict.
+
+        Equivalent to json.loads(engine.save_to_string()).
+
+        Raises:
+            RuntimeError: called before build().
+        """
+        ...
+
+
+# ============================================================================
+# Module-level loading functions
+# ============================================================================
+
+def load_from_string(json: str) -> SugenoEngine | MamdaniEngine:
+    """Load a model from a JSON string produced by save_to_string().
+
+    Returns a ready-to-use SugenoEngine: it is already built, so set_input(),
+    calculate() and get_output() work immediately.
+
+    Note:
+      - The loaded engine is inference-only: add_input_var(),
+        add_membership_func() and add_rule() raise RuntimeError, exactly as
+        after a normal build().
+      - Membership-function names are not part of the JSON format, so the
+        loaded engine cannot report them. Variable names are preserved.
+      - Current input values are not persisted.
+
+    Raises:
+        ValueError: malformed JSON or unknown model type.
+    """
+    ...
+
+class MamdaniEngine(SugenoEngine):
+    def set_integrator(self, start: float, end: float, step: float) -> None: ...
+
+def load_from_file(path: str | Path) -> SugenoEngine | MamdaniEngine:
+    """Load a model from a JSON file written by save_to_file().
+
+    See load_from_string() for the semantics of the returned engine.
+
+    Raises:
+        ValueError: malformed JSON or unknown model type.
+        OSError: the file could not be read.
+    """
+    ...

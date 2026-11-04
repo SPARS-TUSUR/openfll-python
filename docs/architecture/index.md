@@ -36,5 +36,5 @@
 
 - **[Linear Facade](linear-facade.md)** — почему плоский API, что он скрывает
 - **[Python API план](python-api-plan.md)** — оригинальный дизайн (фазы 0-5)
-- **[Native batch contract](native-batch-contract.md)** — контракт будущего `predict_batch`
+- **[Нативный пакетный расчёт](../api/index.md#native-batch-predict)** — контракт `predict_batch`
 - **[Отчёты по фазам](phase-reports.md)** — сводка реализованного и TODO

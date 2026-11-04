@@ -82,7 +82,7 @@ pip install mkdocs mkdocs-material "mkdocstrings[python]" pybind11-stubgen
 ### Каждый раз: сборка и просмотр
 
 ```powershell
-# Live preview с hot-reload — http://127.0.0.1:8000
+# Предпросмотр с автоматическим обновлением — http://127.0.0.1:8000
 scripts\serve_docs.bat
 
 # Сгенерировать статический HTML в site/ (для GitHub Pages)
@@ -104,7 +104,7 @@ scripts\gen_stubs.bat
   - Сборка (`docs/build.md`)
   - Contributing (`docs/contributing.md`)
 
-### Pipeline стабов
+### Порядок генерации файлов типизации
 
 Источник истины: `R"doc()"` в `src/PyFLL/PyFLL.cpp`.
 
@@ -134,12 +134,12 @@ D:/repos/FLL/build/compressor_run.exe
 # C++ сам найдёт <repo>/tests/python/data/ по argv[0]
 ```
 
-### `DLL load failed while importing PyFLL`
+### Ошибка загрузки DLL: `DLL load failed while importing PyFLL`
 
 `PyFLL.pyd` собран в Debug, а Python — Release (или наоборот). Решение: используйте
 **Release**-сборку (Debug-Python требует `python310_d.dll`, которого обычно нет).
 
-### `ModuleNotFoundError: No module named 'PyFLL'`
+### Модуль PyFLL не найден: `ModuleNotFoundError: No module named 'PyFLL'`
 
 Python не находит `.pyd`. Добавьте путь:
 

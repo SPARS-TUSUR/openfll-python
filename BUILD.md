@@ -3,6 +3,19 @@
 Дистрибутив публикуется на PyPI под именем `openfll_python`. После установки
 пользователь импортирует пакет как `openfll`.
 
+## Расширения сериализации 0.3.0.dev1
+
+Ветка `python-serialization` добавляет сохранение/загрузку моделей, MamdaniEngine,
+выбор дефаззификатора, доступ к IModel и сведения о переменных. Подробности —
+в [описании API](docs/api/serialization.md).
+
+Подготовка PR сохраняет настройки последнего релиза из `main`: имя
+`openfll_python`, официальный Windows CPython 3.14, публикацию через OIDC и
+секрет `OPENFLL_BACKEND_TOKEN_SECRET`. Расширения C++ получаются из закрытого
+репозитория по закреплённому коммиту; его исходники в публичный репозиторий
+не копируются. Старый архив с MSYS2-сборкой остаётся отдельным локальным
+снимком результатов, а сценарий выпуска формирует wheel `win_amd64`.
+
 Версия 0.2.0 поддерживает только:
 
 - 64-разрядную Windows;
@@ -34,7 +47,7 @@ Workflow сначала собирает wheel, затем устанавлив�
 ## Доступ к приватному backend
 
 Workflow клонирует `SPARS-TUSUR/fuzzy-logic-library` на зафиксированном commit
-`e49109aabdb37cadadb2cee487e9b6f39261f6fa` из ветки `python/pybind`. Это
+`047e77794458a844047e45c483ff37715edab303` из ветки `python-serialization`. Это
 делает release-сборку воспроизводимой. Если стандартный `GITHUB_TOKEN` не имеет
 доступа к соседнему приватному репозиторию, в настройках `openfll-python` нужно
 создать Actions secret `OPENFLL_BACKEND_TOKEN_SECRET`. Значением должен быть
@@ -91,10 +104,10 @@ CPython 3.14 с python.org. Ожидаемое имя native-модуля —
 ### Сборка backend
 
 ```powershell
-git clone --branch python/pybind --recurse-submodules `
+git clone --branch python-serialization --recurse-submodules `
   https://github.com/SPARS-TUSUR/fuzzy-logic-library.git `
   ..\fuzzy-logic-library
-git -C ..\fuzzy-logic-library checkout e49109aabdb37cadadb2cee487e9b6f39261f6fa
+git -C ..\fuzzy-logic-library checkout 047e77794458a844047e45c483ff37715edab303
 $patchFile = (Resolve-Path .\packaging\cpython-windows.patch).Path
 git -C ..\fuzzy-logic-library apply $patchFile
 

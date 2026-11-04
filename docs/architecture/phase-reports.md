@@ -187,7 +187,7 @@ int main() {
 
 ---
 
-## Baseline-числа
+## Эталонные значения
 
 Тест `SugenoEngineTest.SingleRuleFullActivation` фиксирует первое golden-число:
 при входе `x1=0, x2=0` SugenoEngine выдаёт `10.0` (с точностью `1e-9`),

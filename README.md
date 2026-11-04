@@ -82,6 +82,26 @@ X = np.random.uniform(0.0, 8.0, size=(100000, 2))
 y_batch = e.predict(X)  # вычисляется за ~9 мс в нативном C++ коде
 ```
 
+### Сохранение и загрузка модели
+
+```python
+e.save_to_file("model.json")
+restored = openfll.load_from_file("model.json")
+assert np.allclose(restored.predict(X), e.predict(X))
+
+text = e.save_to_string()
+restored = openfll.load_from_string(text)
+print(restored.get_input_var_names(), restored.get_output_var_names())
+print(e.find_belonging("x1_low", 5.0))
+```
+
+Добавлены `MamdaniEngine` с `set_integrator(start, end, step)`, выбор
+`wtaver/wtsum` через `SugenoEngine.set_defuzzer()` до сборки и `model_ref()`
+для доступа к построенному `IModel`. См. [описание API](docs/api/serialization.md)
+и [пример с проверками](examples/05_serialization_demo.py).
+JSON сохраняет структуру модели; значения входов задаются заново.
+Имена MF и метаданные графиков после загрузки недоступны.
+
 ### Визуальная проверка функций принадлежности
 
 Установите опциональную зависимость для графиков:

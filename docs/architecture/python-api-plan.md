@@ -756,4 +756,4 @@ IF <var1> IS "<mf1>" ((AND|OR) [<norm_name>] <var2> IS "<mf2>")* THEN <out_var> 
 См. детали:
 - `docs/PHASE1_REPORT.md` — отчёт о фазе 1
 - `tests/OpenFLL/linear/BASELINE.md` — golden-числа C++ baseline
-- `tests/python/test_sugeno_smoke.py` — Python cross-check (6/6 PASS)
+- `tests/python/test_sugeno_smoke.py` — независимая проверка Python (пройдено 6 из 6)

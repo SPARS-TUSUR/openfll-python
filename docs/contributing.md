@@ -1,4 +1,4 @@
-# Contributing
+# Участие в разработке
 
 `openfll-python` — это тонкий Python-биндинг над [OpenFLL C++ библиотекой](https://github.com/SPARS-TUSUR/fuzzy-logic-library).
 Большинство фич (новые MF, t/s-нормы, методы движка) добавляются **в C++-репо**, а в этот пакет они попадают
@@ -42,7 +42,7 @@ MSYS2 UCRT64 и официальный CPython 3.14.
    `mkdocs build --strict` — должен пройти без warnings.
 3. Туториалы (`docs/tutorials/`) и API reference (`docs/api/`) — самое то для первого PR.
 
-## Добавить пример / tutorial
+## Добавить пример или учебное руководство
 
 Положите standalone `.py` скрипт в `examples/` (если появится) или новый `.md`
 в `docs/tutorials/`. Без C++ — только Python + `openfll`.

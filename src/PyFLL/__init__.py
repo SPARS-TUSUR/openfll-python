@@ -9,9 +9,16 @@ import importlib.machinery
 import importlib.util
 import os
 import sys
-from typing import Any, List, Literal, Sequence, Tuple, Union
+from typing import TYPE_CHECKING, Any, List, Literal, Sequence, Tuple, Union
 
-__all__ = ["SugenoEngine", "MfType", "TNorms", "SNorms"]
+__all__ = [
+    "SugenoEngine",
+    "MfType",
+    "TNorms",
+    "SNorms",
+    "load_from_string",
+    "load_from_file",
+]
 
 
 # ============================================================================
@@ -82,16 +89,78 @@ class SugenoEngine:
     def predict_batch(self, X: object, *, input_names: Sequence[str]) -> Any: ...
     def is_built(self) -> bool: ...
 
+    # ----- Сериализация -----
+    def save_to_string(self) -> str:
+        """Serialize the built model to a JSON string."""
+        ...
+
+    def save_to_file(self, path: str) -> None:
+        """Serialize the built model to a JSON file."""
+        ...
+
+    def to_dict(self) -> Any:
+        """Return the serialized model as a plain Python dict."""
+        ...
+
 
 # ============================================================================
-# Runtime: загрузка SugenoEngine из _core.pyd через стандартный import.
-# Если .pyd не собран (например, в mkdocs build без wheel) — оставляем стаб.
+# Модульные функции загрузки модели.
+#
+# Статические сигнатуры (для griffe/mypy/IDE) живут в ветке TYPE_CHECKING,
+# реальные функции — в runtime-ветке. griffe вычисляет TYPE_CHECKING как True
+# и не видит runtime-ветку, поэтому не пытается резолвить алиасы на
+# скомпилированный _core (иначе mkdocs build --strict падает с
+# AliasResolutionError).
 # ============================================================================
-try:
-    from ._core import SugenoEngine as _RealSugenoEngine
-    SugenoEngine = _RealSugenoEngine
-    del _RealSugenoEngine
-except ImportError:
-    # _core.pyd не найден (исходники без wheel). Стаб остаётся — будет ошибка
-    # только при инстанцировании SugenoEngine().
-    pass
+if TYPE_CHECKING:
+    def load_from_string(json: str) -> "SugenoEngine":
+        """Load a model from a JSON string produced by save_to_string().
+
+        Returns a ready-to-use SugenoEngine: it is already built, so set_input(),
+        calculate() and get_output() work immediately.
+
+        Note:
+          - The loaded engine is inference-only: add_input_var(),
+            add_membership_func() and add_rule() raise RuntimeError, exactly as
+            after a normal build().
+          - Membership-function names are not part of the JSON format, so the
+            loaded engine cannot report them. Variable names are preserved.
+          - Current input values are not persisted.
+
+        Raises:
+            ValueError: malformed JSON or unknown model type.
+        """
+        ...
+
+    def load_from_file(path: str) -> "SugenoEngine":
+        """Load a model from a JSON file written by save_to_file().
+
+        See load_from_string() for the semantics of the returned engine.
+
+        Raises:
+            ValueError: malformed JSON or unknown model type.
+            OSError: the file could not be read.
+        """
+        ...
+else:
+    # Runtime: загрузка SugenoEngine и функций загрузки из _core.pyd.
+    # Если .pyd не собран (например, в mkdocs build без wheel) — остаются стабы.
+    try:
+        from ._core import SugenoEngine as _RealSugenoEngine, MamdaniEngine, IModel
+        from ._core import load_from_file, load_from_string
+
+        SugenoEngine = _RealSugenoEngine
+        del _RealSugenoEngine
+        __all__ = [*__all__, "MamdaniEngine", "IModel"]
+    except ImportError:
+        def load_from_string(*args: Any, **kwargs: Any) -> Any:
+            """Stub: the PyFLL extension module is not built."""
+            raise ImportError(
+                "PyFLL._core is unavailable: the extension module is not built"
+            )
+
+        def load_from_file(*args: Any, **kwargs: Any) -> Any:
+            """Stub: the PyFLL extension module is not built."""
+            raise ImportError(
+                "PyFLL._core is unavailable: the extension module is not built"
+            )

@@ -32,6 +32,10 @@ except ImportError:
 
 __all__ = [
     "SugenoEngine",
+    "MamdaniEngine",
+    "IModel",
+    "load_from_string",
+    "load_from_file",
     "MfType",
     "TNorms",
     "SNorms",
@@ -46,6 +50,38 @@ __all__ = [
 _BACKEND_IMPORT_ERROR: BaseException | None = None
 _ENGINE_INPUT_NAMES: WeakKeyDictionary[object, list[str]] = WeakKeyDictionary()
 _ENGINE_OUTPUT_NAMES: WeakKeyDictionary[object, list[str]] = WeakKeyDictionary()
+
+
+def _input_names(engine: object) -> list[str]:
+    getter = getattr(engine, "get_input_var_names", None)
+    return list(getter()) if getter is not None else _ENGINE_INPUT_NAMES.get(engine, [])
+
+
+def _output_names(engine: object) -> list[str]:
+    getter = getattr(engine, "get_output_var_names", None)
+    return list(getter()) if getter is not None else _ENGINE_OUTPUT_NAMES.get(engine, [])
+
+
+def load_from_string(json: str) -> SugenoEngine | MamdaniEngine:
+    """Восстановить готовый SugenoEngine или MamdaniEngine из нативного JSON.
+
+    Модель уже собрана. Значения входов нужно задать заново. Имена MF в
+    нативном формате не хранятся; find_belonging по старому имени и plot_mf
+    для загруженного экземпляра недоступны.
+    """
+    if _BACKEND_IMPORT_ERROR is not None:
+        raise ImportError(_backend_error_message()) from _BACKEND_IMPORT_ERROR
+    return importlib.import_module("PyFLL").load_from_string(json)
+
+
+def load_from_file(path: str | Path) -> SugenoEngine | MamdaniEngine:
+    """Загрузить нативный JSON из файла; принимает str и pathlib.Path.
+
+    Повреждённый JSON вызывает ValueError, ошибка чтения — OSError.
+    """
+    if _BACKEND_IMPORT_ERROR is not None:
+        raise ImportError(_backend_error_message()) from _BACKEND_IMPORT_ERROR
+    return importlib.import_module("PyFLL").load_from_file(path)
 
 
 def _backend_error_message() -> str:
@@ -161,7 +197,7 @@ def _install_scalar_predict(engine_cls: type) -> None:
         return False
 
     def _validate_output_name(self, output_name: str | None) -> str:
-        output_names = _ENGINE_OUTPUT_NAMES.get(self, [])
+        output_names = _output_names(self)
         if output_name is not None:
             if output_names and output_name not in output_names:
                 raise KeyError(
@@ -183,7 +219,7 @@ def _install_scalar_predict(engine_cls: type) -> None:
         scalar_inputs: Mapping[str, float],
         output_name: str | None = None,
     ) -> float:
-        input_names = _ENGINE_INPUT_NAMES.get(self, [])
+        input_names = _input_names(self)
         if input_names:
             missing = [name for name in input_names if name not in scalar_inputs]
             if missing:
@@ -242,7 +278,7 @@ def _install_scalar_predict(engine_cls: type) -> None:
                 _validate_output_name(self, output_name)
                 resolved_input_names = input_names
                 if resolved_input_names is None:
-                    registered = _ENGINE_INPUT_NAMES.get(self, [])
+                    registered = _input_names(self)
                     if not registered:
                         raise ValueError(
                             "predict with 2D array requires input_names or previously registered input variables"
@@ -255,7 +291,7 @@ def _install_scalar_predict(engine_cls: type) -> None:
                 return self.predict_batch(inputs, input_names=resolved_input_names)
 
             elif inputs.ndim == 1:
-                registered = _ENGINE_INPUT_NAMES.get(self, [])
+                registered = _input_names(self)
                 if len(registered) == 1:
                     _validate_output_name(self, output_name)
                     if input_names is not None:
@@ -293,7 +329,7 @@ def _install_scalar_predict(engine_cls: type) -> None:
         ) and not _is_bool(inputs)
 
         if is_scalar:
-            registered = _ENGINE_INPUT_NAMES.get(self, [])
+            registered = _input_names(self)
             if len(registered) == 1:
                 return _run_scalar(self, {registered[0]: float(inputs)}, output_name)
             if len(registered) == 0:
@@ -319,7 +355,7 @@ def _install_scalar_predict(engine_cls: type) -> None:
                     raise ValueError(f"X must be a 1D or 2D sequence, got {arr.ndim}D sequence with shape {arr.shape}")
                 resolved_input_names = input_names
                 if resolved_input_names is None:
-                    registered = _ENGINE_INPUT_NAMES.get(self, [])
+                    registered = _input_names(self)
                     if not registered:
                         raise ValueError(
                             "predict with batch sequence requires input_names or previously registered input variables"
@@ -332,7 +368,7 @@ def _install_scalar_predict(engine_cls: type) -> None:
                 return self.predict_batch(arr, input_names=resolved_input_names)
 
             # 1D последовательность
-            registered = _ENGINE_INPUT_NAMES.get(self, [])
+            registered = _input_names(self)
             if len(registered) == 1:
                 if input_names is not None:
                     if len(input_names) != 1 or input_names[0] != registered[0]:
@@ -414,6 +450,17 @@ class SugenoEngine:
         raise ImportError(_backend_error_message()) from _BACKEND_IMPORT_ERROR
 
 
+class MamdaniEngine(SugenoEngine):
+    """Placeholder для native MamdaniEngine."""
+
+
+class IModel:
+    """Построенная модель; получать через engine.model_ref()."""
+
+    def __init__(self) -> None:
+        raise TypeError("IModel is obtained from engine.model_ref()")
+
+
 # ============================================================================
 # Время выполнения: загрузка существующего пакета бэкенда. openfll намеренно не
 # импортирует и не включает в поставку собственное расширение _core.
@@ -430,6 +477,10 @@ try:
 
     SugenoEngine = _RealSugenoEngine
     _install_scalar_predict(SugenoEngine)
+    if hasattr(_PyFLL, "MamdaniEngine"):
+        MamdaniEngine = _PyFLL.MamdaniEngine
+    if hasattr(_PyFLL, "IModel"):
+        IModel = _PyFLL.IModel
     del _PyFLL
     del _RealSugenoEngine
 except ImportError as exc:
