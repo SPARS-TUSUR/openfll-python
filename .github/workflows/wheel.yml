@@ -186,7 +186,7 @@ jobs:
       - name: Upload wheel artifact
         uses: actions/upload-artifact@v4
         with:
-          name: openfll-python-0.2.0-cp314-win-amd64
+          name: openfll-python-cp314-win-amd64
           path: wheelhouse/*.whl
           if-no-files-found: error
           retention-days: 14
@@ -202,7 +202,7 @@ jobs:
       - name: Download wheel artifact
         uses: actions/download-artifact@v4
         with:
-          name: openfll-python-0.2.0-cp314-win-amd64
+          name: openfll-python-cp314-win-amd64
           path: dist
 
       - name: Attach wheel
@@ -225,7 +225,7 @@ jobs:
       - name: Download wheel artifact
         uses: actions/download-artifact@v4
         with:
-          name: openfll-python-0.2.0-cp314-win-amd64
+          name: openfll-python-cp314-win-amd64
           path: dist
 
       - name: Publish to TestPyPI
@@ -249,7 +249,7 @@ jobs:
       - name: Download wheel artifact
         uses: actions/download-artifact@v4
         with:
-          name: openfll-python-0.2.0-cp314-win-amd64
+          name: openfll-python-cp314-win-amd64
           path: dist
 
       - name: Publish to PyPI
