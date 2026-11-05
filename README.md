@@ -97,7 +97,7 @@ print(e.find_belonging("x1_low", 5.0))
 
 Добавлены `MamdaniEngine` с `set_integrator(start, end, step)`, выбор
 `wtaver/wtsum` через `SugenoEngine.set_defuzzer()` до сборки и `model_ref()`
-для доступа к построенному `IModel`. См. [описание API](docs/api/serialization.md)
+для безопасного доступа к построенной модели через `ModelView`. См. [описание API](docs/api/serialization.md)
 и [пример с проверками](examples/05_serialization_demo.py).
 JSON сохраняет структуру модели; значения входов задаются заново.
 Имена MF и метаданные графиков после загрузки недоступны.

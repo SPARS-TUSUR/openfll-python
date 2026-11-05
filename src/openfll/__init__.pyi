@@ -63,7 +63,7 @@ class MembershipPlot:
     saved_path: Path | None
 
 
-class IModel:
+class ModelView:
     def calculate(self) -> None: ...
     def save_to_string(self) -> str: ...
     def save_to_file(self, path: str | Path) -> None: ...
@@ -72,7 +72,7 @@ class IModel:
 def load_from_string(json: str) -> SugenoEngine | MamdaniEngine: ...
 def load_from_file(path: str | Path) -> SugenoEngine | MamdaniEngine: ...
 
-class SugenoEngine:
+class BaseLinearEngine:
     """Плоский native-backed facade для модели нечеткой логики Сугено.
 
     Жизненный цикл:
@@ -155,8 +155,9 @@ class SugenoEngine:
     def save_to_string(self) -> str: ...
     def save_to_file(self, path: str | Path) -> None: ...
     def to_dict(self) -> dict[str, Any]: ...
-    def model_ref(self) -> IModel: ...
+    def model_ref(self) -> ModelView: ...
     def set_defuzzer(self, name: Literal["wtaver", "wtsum", "centroid"]) -> None: ...
+    def get_defuzzer(self) -> str: ...
     def find_belonging(self, mf_name: str, value: float) -> float: ...
     def get_input_var_names(self) -> list[str]: ...
     def get_output_var_names(self) -> list[str]: ...
@@ -248,14 +249,19 @@ class SugenoEngine:
 
 
 # ============================================================================
-class MamdaniEngine(SugenoEngine):
+class SugenoEngine(BaseLinearEngine):
+    def __init__(self) -> None: ...
+
+
+class MamdaniEngine(BaseLinearEngine):
+    def __init__(self) -> None: ...
     def set_integrator(self, start: float, end: float, step: float) -> None: ...
 
 # Python-only helpers (submodule `openfll._helpers`).
 # Сигнатуры ниже — ручные type hints; runtime-импорт через `openfll.__init__`.
 # ============================================================================
 def plot_mf(
-    engine: SugenoEngine,
+    engine: BaseLinearEngine,
     variables: str | Sequence[str] | None = None,
     *,
     variable_type: Literal["all", "input", "output"] = "all",
@@ -267,14 +273,14 @@ def plot_mf(
 
 
 def monte_carlo(
-    engine: SugenoEngine,
+    engine: BaseLinearEngine,
     var_inputs: list[tuple[str, tuple[float, float]]],
     var_outputs: list[str],
     n_samples: int = 1000,
     seed: int | None = None,
 ) -> list[dict[str, float]]: ...
 def grid_2d(
-    engine: SugenoEngine,
+    engine: BaseLinearEngine,
     x_var: str,
     y_var: str,
     x_range: tuple[float, float],
@@ -283,7 +289,7 @@ def grid_2d(
     n: int = 20,
 ) -> tuple[list[float], list[float], list[list[float]]]: ...
 def check_output_finite(
-    engine: SugenoEngine,
+    engine: BaseLinearEngine,
     var_inputs: list[tuple[str, tuple[float, float]]],
     var_outputs: list[str],
     n_samples: int = 1000,

@@ -51,14 +51,14 @@ SNorms = Literal[
 # SugenoEngine — the main public class
 # ============================================================================
 
-class IModel:
+class ModelView:
     def calculate(self) -> None: ...
     def save_to_string(self) -> str: ...
     def save_to_file(self, path: str | Path) -> None: ...
     def to_dict(self) -> dict[str, Any]: ...
 
-class SugenoEngine:
-    """Linear facade for Sugeno fuzzy logic model.
+class BaseLinearEngine:
+    """Общий линейный API моделей Сугено и Мамдани.
 
     Provides a flat, name-based API on top of OpenFLL's fluent
     SugenoBuilder / RulesBuilder. Build the model by:
@@ -75,8 +75,9 @@ class SugenoEngine:
     Threading: instances are NOT thread-safe. Use one engine per thread.
     """
 
-    def model_ref(self) -> IModel: ...
+    def model_ref(self) -> ModelView: ...
     def set_defuzzer(self, name: Literal["wtaver", "wtsum", "centroid"]) -> None: ...
+    def get_defuzzer(self) -> str: ...
     def find_belonging(self, mf_name: str, value: float) -> float: ...
     def get_input_var_names(self) -> list[str]: ...
     def get_output_var_names(self) -> list[str]: ...
@@ -361,7 +362,7 @@ class SugenoEngine:
 # ============================================================================
 
 def load_from_string(json: str) -> SugenoEngine | MamdaniEngine:
-    """Load a model from a JSON string produced by save_to_string().
+    """Восстановить движок из JSON, созданного save_to_string().
 
     Returns a ready-to-use SugenoEngine: it is already built, so set_input(),
     calculate() and get_output() work immediately.
@@ -370,8 +371,8 @@ def load_from_string(json: str) -> SugenoEngine | MamdaniEngine:
       - The loaded engine is inference-only: add_input_var(),
         add_membership_func() and add_rule() raise RuntimeError, exactly as
         after a normal build().
-      - Membership-function names are not part of the JSON format, so the
-        loaded engine cannot report them. Variable names are preserved.
+      - Метаданные фасада сохраняют имена MF и порядок переменных.
+        Старые JSON без этих метаданных также поддерживаются.
       - Current input values are not persisted.
 
     Raises:
@@ -379,7 +380,12 @@ def load_from_string(json: str) -> SugenoEngine | MamdaniEngine:
     """
     ...
 
-class MamdaniEngine(SugenoEngine):
+class SugenoEngine(BaseLinearEngine):
+    def __init__(self) -> None: ...
+
+
+class MamdaniEngine(BaseLinearEngine):
+    def __init__(self) -> None: ...
     def set_integrator(self, start: float, end: float, step: float) -> None: ...
 
 def load_from_file(path: str | Path) -> SugenoEngine | MamdaniEngine:

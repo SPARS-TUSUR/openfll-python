@@ -1,4 +1,4 @@
-"""Batch-инференс: прогон множества входов через SugenoEngine.
+"""Batch-инференс: прогон множества входов через BaseLinearEngine.
 
 Полезно для:
   - Monte-Carlo валидации модели (проверить, что выход всегда конечный)
@@ -13,13 +13,13 @@ import random
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from openfll import SugenoEngine
+    from openfll import BaseLinearEngine
 
 __all__ = ["monte_carlo", "grid_2d", "check_output_finite"]
 
 
 def monte_carlo(
-    engine: "SugenoEngine",
+    engine: "BaseLinearEngine",
     var_inputs: list[tuple[str, tuple[float, float]]],
     var_outputs: list[str],
     n_samples: int = 1000,
@@ -28,7 +28,7 @@ def monte_carlo(
     """Случайные входы → батч результатов.
 
     Args:
-        engine: собранный SugenoEngine (после `build()`).
+        engine: собранный BaseLinearEngine (после `build()`).
         var_inputs: список (var_name, (min, max)) для каждого входа.
         var_outputs: имена выходов, которые нужно собрать.
         n_samples: количество случайных точек.
@@ -62,7 +62,7 @@ def monte_carlo(
 
 
 def grid_2d(
-    engine: "SugenoEngine",
+    engine: "BaseLinearEngine",
     x_var: str,
     y_var: str,
     x_range: tuple[float, float],
@@ -104,7 +104,7 @@ def _linspace(rng: tuple[float, float], n: int, i: int) -> float:
 
 
 def check_output_finite(
-    engine: "SugenoEngine",
+    engine: "BaseLinearEngine",
     var_inputs: list[tuple[str, tuple[float, float]]],
     var_outputs: list[str],
     n_samples: int = 1000,
@@ -113,7 +113,7 @@ def check_output_finite(
     """Сэмплирует engine и считает, сколько раз выход был NaN/Inf.
 
     Args:
-        engine: собранный SugenoEngine.
+        engine: собранный BaseLinearEngine.
         var_inputs: список (var_name, (min, max)) для каждого входа.
         var_outputs: имена выходов, которые нужно проверять.
         n_samples: количество случайных точек.

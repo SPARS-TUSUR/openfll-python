@@ -33,7 +33,8 @@ except ImportError:
 __all__ = [
     "SugenoEngine",
     "MamdaniEngine",
-    "IModel",
+    "BaseLinearEngine",
+    "ModelView",
     "load_from_string",
     "load_from_file",
     "MfType",
@@ -65,9 +66,9 @@ def _output_names(engine: object) -> list[str]:
 def load_from_string(json: str) -> SugenoEngine | MamdaniEngine:
     """Восстановить готовый SugenoEngine или MamdaniEngine из нативного JSON.
 
-    Модель уже собрана. Значения входов нужно задать заново. Имена MF в
-    нативном формате не хранятся; find_belonging по старому имени и plot_mf
-    для загруженного экземпляра недоступны.
+    Модель уже собрана. Значения входов нужно задать заново. Метаданные
+    линейного API сохраняют имена MF для find_belonging(). Старые JSON без
+    имён MF поддерживаются, но исходные имена из них восстановить нельзя.
     """
     if _BACKEND_IMPORT_ERROR is not None:
         raise ImportError(_backend_error_message()) from _BACKEND_IMPORT_ERROR
@@ -442,23 +443,27 @@ def _install_scalar_predict(engine_cls: type) -> None:
     engine_cls._openfll_predict_installed = True
 
 
-class SugenoEngine:
-    """Placeholder, который заменяется реальным PyFLL.SugenoEngine."""
+class BaseLinearEngine:
+    """Общий фасад; при загрузке заменяется нативным классом."""
 
     def __init__(self) -> None:
         """Создать engine или явно сообщить, что native backend не загружен."""
         raise ImportError(_backend_error_message()) from _BACKEND_IMPORT_ERROR
 
 
-class MamdaniEngine(SugenoEngine):
+class SugenoEngine(BaseLinearEngine):
+    """Фасад Сугено; при загрузке заменяется нативным классом."""
+
+
+class MamdaniEngine(BaseLinearEngine):
     """Placeholder для native MamdaniEngine."""
 
 
-class IModel:
-    """Построенная модель; получать через engine.model_ref()."""
+class ModelView:
+    """Безопасное представление модели; получать через engine.model_ref()."""
 
     def __init__(self) -> None:
-        raise TypeError("IModel is obtained from engine.model_ref()")
+        raise TypeError("ModelView is obtained from engine.model_ref()")
 
 
 # ============================================================================
@@ -476,11 +481,15 @@ try:
         )
 
     SugenoEngine = _RealSugenoEngine
-    _install_scalar_predict(SugenoEngine)
+    if hasattr(_PyFLL, "BaseLinearEngine"):
+        BaseLinearEngine = _PyFLL.BaseLinearEngine
+        _install_scalar_predict(BaseLinearEngine)
+    else:
+        _install_scalar_predict(SugenoEngine)
     if hasattr(_PyFLL, "MamdaniEngine"):
         MamdaniEngine = _PyFLL.MamdaniEngine
-    if hasattr(_PyFLL, "IModel"):
-        IModel = _PyFLL.IModel
+    if hasattr(_PyFLL, "ModelView"):
+        ModelView = _PyFLL.ModelView
     del _PyFLL
     del _RealSugenoEngine
 except ImportError as exc:

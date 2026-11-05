@@ -27,16 +27,25 @@ src/OpenFLL/linear/
 ├── mf_factory.h/.cpp       make_membership_function(type, params)
 ├── norm_registry.h          parse_norm_name(name, kind) → NormId
 ├── rule_parser.h/.cpp       parse_rule(text) → ParsedRule
-└── sugeno_engine.h/.cpp     SugenoEngine (публичный класс)
+└── sugeno_engine.h/.cpp     BaseLinearEngine, SugenoEngine, MamdaniEngine
 ```
 
 ## Архитектура фасада
 
-### `SugenoEngine` — публичный API
+### Общий фасад и независимые виды моделей
+
+`BaseLinearEngine` хранит переменные, именованные MF и правила, реализует
+парсинг, исполнение и пакетные вычисления. `SugenoEngine` и `MamdaniEngine`
+наследуются непосредственно от него. Настройка `wtaver`/`wtsum` находится в
+`SugenoEngine`, интегратор и `centroid` — в `MamdaniEngine`. Общий фасад не
+содержит флага выбора типа модели. Виртуальный `make_model()` создаёт
+конкретную модель через соответствующий построитель.
+
+Ниже схематично показана общая часть API:
 
 ```cpp
 namespace OFLL::Linear {
-    class SugenoEngine {
+    class BaseLinearEngine {
     public:
         void add_input_var(std::string_view name);
         void add_output_var(std::string_view name);
@@ -55,7 +64,7 @@ namespace OFLL::Linear {
         std::unordered_map<std::string, std::shared_ptr<Var>> _input_vars;
         std::unordered_map<std::string, std::shared_ptr<Var>> _output_vars;
         std::unordered_map<std::string, std::shared_ptr<IMembershipFunction>> _mfs;
-        std::vector<std::string> _rule_texts;
+        // Нормализованные правила и определения именованных MF.
         std::unique_ptr<IModel> m_model;
         NormId m_default_t_norm = NormId::Min;
         NormId m_default_s_norm = NormId::Max;

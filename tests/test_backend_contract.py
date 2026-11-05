@@ -71,7 +71,8 @@ def test_openfll_keeps_public_symbols_with_backend(tmp_path, monkeypatch):
     assert set(openfll.__all__) == {
         "SugenoEngine",
         "MamdaniEngine",
-        "IModel",
+        "BaseLinearEngine",
+        "ModelView",
         "load_from_string",
         "load_from_file",
         "MfType",

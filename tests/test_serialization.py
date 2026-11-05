@@ -38,10 +38,9 @@ def test_roundtrip_both_paths_and_native_model_view(kind, defuzzer, tmp_path):
     expected = engine.predict(points)
     document = engine.to_dict()
     assert document == json.loads(engine.save_to_string())
-    native_document = engine.model_ref().to_dict()
-    assert {k: v for k, v in native_document.items() if k != "extra"} == {
-        k: v for k, v in document.items() if k != "extra"
-    }
+    assert isinstance(engine.model_ref(), openfll.ModelView)
+    assert engine.model_ref().to_dict() == document
+    assert engine.model_ref().save_to_string() == engine.save_to_string()
     path = tmp_path / "модель с пробелами.json"
     engine.save_to_file(path)
     for restored in (openfll.load_from_string(engine.save_to_string()), openfll.load_from_file(path)):
@@ -64,8 +63,9 @@ def test_roundtrip_both_paths_and_native_model_view(kind, defuzzer, tmp_path):
             restored.set_defuzzer(defuzzer)
         with pytest.raises(ValueError, match="missing"):
             restored.predict({})
-        with pytest.raises(IndexError):
-            restored.find_belonging("cold", 3)
+        assert restored.find_belonging("cold", 3) == pytest.approx(0.7)
+        assert restored.find_belonging("hot", 3) == pytest.approx(0.3)
+        assert restored.get_defuzzer() == defuzzer
         # Повторная загрузка и удаление первого движка не должны нарушать владение объектами.
         second = openfll.load_from_string(restored.save_to_string())
         del restored
@@ -213,7 +213,9 @@ def test_multiple_outputs_and_disabled_consequents_survive_repeated_loading(kind
 
 def test_native_json_without_facade_metadata():
     engine = make_engine()
-    restored = openfll.load_from_string(engine.model_ref().save_to_string())
+    document = engine.to_dict()
+    document.pop("extra", None)
+    restored = openfll.load_from_string(json.dumps(document))
     assert restored.predict({"temperature": 3}) == pytest.approx(engine.predict(3))
 
 
@@ -222,4 +224,92 @@ def test_malformed_rule_indices_raise_instead_of_crashing(field, value):
     doc = make_engine().to_dict()
     doc["rules"][0][field] = value
     with pytest.raises(ValueError):
+        openfll.load_from_string(json.dumps(doc))
+
+
+@pytest.mark.parametrize("engine_type", [openfll.SugenoEngine, openfll.MamdaniEngine])
+def test_engine_hierarchy_and_specific_configuration(engine_type):
+    engine = engine_type()
+    assert isinstance(engine, openfll.BaseLinearEngine)
+    assert not issubclass(openfll.MamdaniEngine, openfll.SugenoEngine)
+    assert not issubclass(openfll.SugenoEngine, openfll.MamdaniEngine)
+    assert not hasattr(openfll, "IModel")
+    assert hasattr(engine, "set_integrator") is (engine_type is openfll.MamdaniEngine)
+    assert engine.get_defuzzer() == ("centroid" if engine_type is openfll.MamdaniEngine else "wtaver")
+
+
+@pytest.mark.parametrize("kind,defuzzer", [("sugeno", "wtaver"), ("sugeno", "wtsum"), ("mamdani", "centroid")])
+def test_model_view_preserves_order_unused_variables_and_all_memberships(kind, defuzzer, tmp_path):
+    engine = openfll.MamdaniEngine() if kind == "mamdani" else openfll.SugenoEngine()
+    for name in ("z", "a", "unused_input"):
+        engine.add_input_var(name)
+    for name in ("unused_output", "y"):
+        engine.add_output_var(name)
+    engine.add_membership_func("z", "cold", "triangular", [0, 0, 10])
+    engine.add_membership_func("a", "active", "constant", [1])
+    engine.add_membership_func("unused_input", "unused_gaussian", "gaussian", [0, 2])
+    engine.add_membership_func("unused_output", "unused_trapezoid", "trapezoidal", [0, 1, 2, 3])
+    engine.add_membership_func("y", "answer", "triangular" if kind == "mamdani" else "constant",
+                               [2, 4, 6] if kind == "mamdani" else [4])
+    engine.add_rule('IF z IS "cold" AND a IS "active" THEN y IS "answer"')
+    engine.set_defuzzer(defuzzer)
+    if kind == "mamdani":
+        engine.set_integrator(0, 8, 0.01)
+    engine.build()
+    expected_inputs = engine.get_input_var_names()
+    expected_outputs = engine.get_output_var_names()
+    degrees = {name: engine.find_belonging(name, 0.5) for name in
+               ("cold", "active", "unused_gaussian", "unused_trapezoid", "answer")}
+    values = {"z": 3, "a": 1, "unused_input": 42}
+    expected = engine.predict(values, output_name="y")
+    for _ in range(3):
+        view = engine.model_ref()
+        assert view.to_dict() == engine.to_dict()
+        assert view.save_to_string() == engine.save_to_string()
+        path = tmp_path / "представление модели.json"
+        view.save_to_file(path)
+        restored_file = openfll.load_from_file(path)
+        restored_string = openfll.load_from_string(view.save_to_string())
+        for restored in (restored_file, restored_string):
+            assert restored.get_input_var_names() == expected_inputs
+            assert restored.get_output_var_names() == expected_outputs
+            assert restored.get_defuzzer() == defuzzer
+            assert restored.predict(values, output_name="y") == pytest.approx(expected)
+            for name, degree in degrees.items():
+                assert restored.find_belonging(name, 0.5) == pytest.approx(degree)
+        engine = restored_string
+
+
+@pytest.mark.parametrize("section", ["model_type", "defuzzer", "in_mfs", "out_mfs", "rules", "operator"])
+def test_unknown_serialized_types_report_the_actual_name(section):
+    doc = make_engine().to_dict()
+    unknown = "NonexistentSerializedType"
+    if section == "model_type":
+        doc[section] = unknown
+    elif section in ("defuzzer",):
+        doc[section]["type"] = unknown
+    elif section == "operator":
+        doc["rules"][0]["Operation"] = unknown
+    else:
+        doc[section][0]["type"] = unknown
+    with pytest.raises(ValueError, match="Unknown serialized type: " + unknown):
+        openfll.load_from_string(json.dumps(doc))
+
+
+@pytest.mark.parametrize("kind,defuzzer", [("sugeno", "wtaver"), ("sugeno", "wtsum"), ("mamdani", "centroid")])
+def test_defuzzer_restored_from_native_json_without_facade_metadata(kind, defuzzer):
+    engine = make_engine(kind, defuzzer)
+    doc = engine.to_dict()
+    doc.pop("extra", None)
+    for _ in range(3):
+        restored = openfll.load_from_string(json.dumps(doc))
+        assert type(restored) is type(engine)
+        assert restored.get_defuzzer() == defuzzer
+        doc = restored.to_dict()
+
+
+def test_incompatible_model_and_defuzzer_are_rejected():
+    doc = make_engine().to_dict()
+    doc["model_type"] = "Mamdani"
+    with pytest.raises(ValueError, match="Unsupported Mamdani defuzzer"):
         openfll.load_from_string(json.dumps(doc))

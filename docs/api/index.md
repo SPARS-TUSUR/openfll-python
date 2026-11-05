@@ -6,7 +6,7 @@
 
 - **[`SugenoEngine`](sugeno-engine.md)** — линейная обёртка над Sugeno-моделью OpenFLL
 - **[`MamdaniEngine`](../tutorials/03-mamdani.md)** — модель Мамдани с centroid-дефаззификацией.
-- **[`IModel`, сохранение и загрузка](serialization.md)** — нативный JSON и доступ к построенной модели.
+- **[`ModelView`, сохранение и загрузка](serialization.md)** — нативный JSON и доступ к построенной модели.
 
 ## Вспомогательные функции
 

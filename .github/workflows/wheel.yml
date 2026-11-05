@@ -36,7 +36,7 @@ jobs:
         with:
           repository: SPARS-TUSUR/fuzzy-logic-library
           # Pin the reviewed backend revision so release builds are reproducible.
-          ref: 047e77794458a844047e45c483ff37715edab303
+          ref: c05937e85e26ab27bf26efdc149895c49c4a61f1
           path: fuzzy-logic-library
           submodules: recursive
           token: ${{ secrets.OPENFLL_BACKEND_TOKEN_SECRET || github.token }}
