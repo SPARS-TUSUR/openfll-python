@@ -6,11 +6,11 @@ PyFLL Python module, even though the actual implementation is a compiled
 
 Source of truth:
   - C++ binding:  src/PyFLL/PyFLL.cpp
-  - C++ API:     src/OpenFLL/linear/sugeno_engine.h
+  - C++ API:     src/OpenFLL/linear/linear_engine.h
 
 When you change the C++ binding, please update this file to match.
 """
-from typing import Any, List, Literal, Sequence, Tuple, Union
+from typing import Generic, TypeVar, overload, Any, List, Literal, Sequence, Tuple, Union
 from pathlib import Path
 
 # ============================================================================
@@ -57,7 +57,10 @@ class ModelView:
     def save_to_file(self, path: str | Path) -> None: ...
     def to_dict(self) -> dict[str, Any]: ...
 
-class BaseLinearEngine:
+_DefuzzerName = TypeVar("_DefuzzerName", bound=str, contravariant=True)
+
+
+class BaseLinearEngine(Generic[_DefuzzerName]):
     """Общий линейный API моделей Сугено и Мамдани.
 
     Provides a flat, name-based API on top of OpenFLL's fluent
@@ -76,7 +79,7 @@ class BaseLinearEngine:
     """
 
     def model_ref(self) -> ModelView: ...
-    def set_defuzzer(self, name: Literal["wtaver", "wtsum", "centroid"]) -> None: ...
+    def set_defuzzer(self, name: _DefuzzerName) -> None: ...
     def get_defuzzer(self) -> str: ...
     def find_belonging(self, mf_name: str, value: float) -> float: ...
     def get_input_var_names(self) -> list[str]: ...
@@ -141,6 +144,7 @@ class BaseLinearEngine:
         """
         ...
 
+    @overload
     def add_rule(self, rule: str) -> None:
         """Add a fuzzy rule in textual form.
 
@@ -165,6 +169,7 @@ class BaseLinearEngine:
         """
         ...
 
+    @overload
     def add_rule(
         self,
         antecedent: List[Tuple[str, str]],
@@ -380,12 +385,16 @@ def load_from_string(json: str) -> SugenoEngine | MamdaniEngine:
     """
     ...
 
-class SugenoEngine(BaseLinearEngine):
+class SugenoEngine(BaseLinearEngine[Literal["wtaver", "wtsum"]]):
     def __init__(self) -> None: ...
+    def set_defuzzer(self, name: Literal["wtaver", "wtsum"]) -> None: ...
+    def get_defuzzer(self) -> Literal["wtaver", "wtsum"]: ...
 
 
-class MamdaniEngine(BaseLinearEngine):
+class MamdaniEngine(BaseLinearEngine[Literal["centroid"]]):
     def __init__(self) -> None: ...
+    def set_defuzzer(self, name: Literal["centroid"]) -> None: ...
+    def get_defuzzer(self) -> Literal["centroid"]: ...
     def set_integrator(self, start: float, end: float, step: float) -> None: ...
 
 def load_from_file(path: str | Path) -> SugenoEngine | MamdaniEngine:

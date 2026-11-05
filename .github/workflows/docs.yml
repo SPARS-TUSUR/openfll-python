@@ -6,9 +6,17 @@ on:
     paths:
       - "docs/**"
       - "mkdocs.yml"
+      - "src/PyFLL/**"
       - "src/openfll/__init__.py"
       - "src/openfll/__init__.pyi"
       - ".github/workflows/docs.yml"
+  pull_request:
+    paths:
+      - "docs/**"
+      - "mkdocs.yml"
+      - ".github/workflows/docs.yml"
+      - "src/PyFLL/**"
+      - "src/openfll/**"
   workflow_dispatch:
 
 permissions:
@@ -35,6 +43,24 @@ jobs:
         run: |
           pip install --quiet mkdocs mkdocs-material "mkdocstrings[python]"
 
+      - name: Check import without native extension
+        env:
+          PYTHONPATH: src
+        run: |
+          python - <<'PY'
+          import sys
+          import PyFLL
+          assert "PyFLL._core" not in sys.modules
+          assert PyFLL.SugenoEngine.__module__ == "PyFLL"
+          assert PyFLL.BaseLinearEngine.add_input_var.__doc__
+          try:
+              PyFLL.SugenoEngine()
+          except ImportError:
+              pass
+          else:
+              raise AssertionError("Native extension is required for calculations")
+          PY
+
       - name: Build docs
         run: mkdocs build --strict
 
@@ -44,6 +70,7 @@ jobs:
           path: site
 
   deploy:
+    if: github.event_name != 'pull_request'
     name: Deploy to GitHub Pages
     needs: build
     runs-on: ubuntu-latest

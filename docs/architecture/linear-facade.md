@@ -27,8 +27,12 @@ src/OpenFLL/linear/
 ├── mf_factory.h/.cpp       make_membership_function(type, params)
 ├── norm_registry.h          parse_norm_name(name, kind) → NormId
 ├── rule_parser.h/.cpp       parse_rule(text) → ParsedRule
-└── sugeno_engine.h/.cpp     BaseLinearEngine, SugenoEngine, MamdaniEngine
+└── linear_engine.h/.cpp     BaseLinearEngine, SugenoEngine, MamdaniEngine
 ```
+
+Старые заголовки `sugeno_engine.h` и `sugeno_engine_loader.h` оставлены как
+совместимые обёртки с include новых файлов. Объявления и реализация находятся
+в `linear_engine.h/.cpp` и `linear_engine_loader.h/.cpp`.
 
 ## Архитектура фасада
 
@@ -111,7 +115,7 @@ term        := IDENT IS STRING
 
 ## Почему header-only (не всё)
 
-- **`sugeno_engine.h`/`cpp`** — реализация держит `SugenoBuilder`/`RulesBuilder` инстансы,
+- **`linear_engine.h`/`cpp`** — реализация держит `SugenoBuilder`/`RulesBuilder` инстансы,
   нельзя inline-определить из-за зависимостей.
 - **`mf_factory.h`/`cpp`**, **`rule_parser.h`/`cpp`** — то же самое.
 - **`norm_registry.h`** — header-only (только `enum` + маппинг).
@@ -123,5 +127,5 @@ term        := IDENT IS STRING
 | Новый тип MF | `mf_factory.h` + `mf_factory.cpp` | `set_union_mf`, `bell_mf` |
 | Новую t/s-норму | `norm_registry.h` | `lambda_norm` |
 | Новый синтаксис правил | `rule_parser.cpp` | `NOT` (отрицание), скобки для приоритетов |
-| Новый метод `SugenoEngine` | `sugeno_engine.h/.cpp` | `clone()`, `serialize()` |
+| Новый метод `SugenoEngine` | `linear_engine.h/.cpp` | `clone()`, `serialize()` |
 | Целую новую модель (Mamdani) | `mamdani_engine.h/.cpp` (фаза 4) | — |

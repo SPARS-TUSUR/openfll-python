@@ -2,7 +2,7 @@
 
 Исходники C++ находятся в закрытом репозитории
 `SPARS-TUSUR/fuzzy-logic-library`. Расширения подготовлены в ветке
-`python-serialization`, коммит `c05937e85e26ab27bf26efdc149895c49c4a61f1`,
+`python-serialization`, коммит `151ad1d692e999a374b53b82afb0fc8c792ebc35`,
 на основе `python/pybind@4b2bfe286d131065092e2a5932b3bc0b777d0b0f`.
 
 Сценарий сборки Python-пакета получает этот коммит из закрытого репозитория

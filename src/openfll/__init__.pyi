@@ -4,7 +4,7 @@ openfll — пользовательский пакет. Во время вып�
 внутреннему backend-пакету PyFLL, который загружает PyFLL._core.
 """
 from pathlib import Path
-from typing import Any, List, Literal, Mapping, Sequence, Tuple, Union, overload
+from typing import Generic, TypeVar, Any, List, Literal, Mapping, Sequence, Tuple, Union, overload
 import numpy as np
 
 MfType = Literal[
@@ -72,8 +72,11 @@ class ModelView:
 def load_from_string(json: str) -> SugenoEngine | MamdaniEngine: ...
 def load_from_file(path: str | Path) -> SugenoEngine | MamdaniEngine: ...
 
-class BaseLinearEngine:
-    """Плоский native-backed facade для модели нечеткой логики Сугено.
+_DefuzzerName = TypeVar("_DefuzzerName", bound=str, contravariant=True)
+
+
+class BaseLinearEngine(Generic[_DefuzzerName]):
+    """Общий линейный API моделей нечеткой логики Сугено и Мамдани.
 
     Жизненный цикл:
         До build() настраиваются переменные, membership-функции, правила и
@@ -156,7 +159,7 @@ class BaseLinearEngine:
     def save_to_file(self, path: str | Path) -> None: ...
     def to_dict(self) -> dict[str, Any]: ...
     def model_ref(self) -> ModelView: ...
-    def set_defuzzer(self, name: Literal["wtaver", "wtsum", "centroid"]) -> None: ...
+    def set_defuzzer(self, name: _DefuzzerName) -> None: ...
     def get_defuzzer(self) -> str: ...
     def find_belonging(self, mf_name: str, value: float) -> float: ...
     def get_input_var_names(self) -> list[str]: ...
@@ -185,14 +188,6 @@ class BaseLinearEngine:
     def predict(
         self,
         inputs: Sequence[float] | Sequence[Sequence[float]] | np.ndarray,
-        output_name: str | None = None,
-        *,
-        input_names: Sequence[str] | None = None,
-    ) -> float | np.ndarray: ...
-
-    def predict(
-        self,
-        inputs: Any,
         output_name: str | None = None,
         *,
         input_names: Sequence[str] | None = None,
@@ -249,12 +244,16 @@ class BaseLinearEngine:
 
 
 # ============================================================================
-class SugenoEngine(BaseLinearEngine):
+class SugenoEngine(BaseLinearEngine[Literal["wtaver", "wtsum"]]):
     def __init__(self) -> None: ...
+    def set_defuzzer(self, name: Literal["wtaver", "wtsum"]) -> None: ...
+    def get_defuzzer(self) -> Literal["wtaver", "wtsum"]: ...
 
 
-class MamdaniEngine(BaseLinearEngine):
+class MamdaniEngine(BaseLinearEngine[Literal["centroid"]]):
     def __init__(self) -> None: ...
+    def set_defuzzer(self, name: Literal["centroid"]) -> None: ...
+    def get_defuzzer(self) -> Literal["centroid"]: ...
     def set_integrator(self, start: float, end: float, step: float) -> None: ...
 
 # Python-only helpers (submodule `openfll._helpers`).
