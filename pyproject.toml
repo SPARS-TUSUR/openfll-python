@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "openfll_python"
-version = "0.2.0"
+version = "0.3.0.dev1"
 description = "Python bindings for OpenFLL fuzzy logic library"
 readme = "README.md"
 license = "MIT"
@@ -59,8 +59,10 @@ include = ["openfll*", "PyFLL*"]
 [tool.setuptools.package-data]
 "openfll" = [
     "*.pyi",     # public type stubs для IDE
+    "py.typed",
 ]
 "PyFLL" = [
+    "backend_build.json",
     "*.pyd",     # native backend: PyFLL._core (cp314)
     "*.so",      # на случай Linux
     "*.dll",     # MinGW runtime (libstdc++-6.dll и т.д.)

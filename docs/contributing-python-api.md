@@ -1,4 +1,4 @@
-# Contributing: Python API development
+# Участие в разработке Python API
 
 Это руководство для коллег, которые расширяют **только Python-часть** openfll —
 без правок C++ ядра. Если нужна новая MF, t/s-норма или метод SugenoEngine —
@@ -19,7 +19,7 @@
 
 Нельзя без C++:
 - Добавить новый тип MF (triangular, gaussian и т.д. — закрытый список в C++)
-- Добавить новую t/s-норму (см. NormId в `sugeno_engine.cpp`)
+- Добавить новую t/s-норму (см. NormId в `linear_engine.cpp`)
 - Изменить алгоритм вывода (Sugeno 0/1 порядка)
 - Получить произвольную конфигурацию из уже готового native engine через
   read-back API. Для `plot_mf` пакет отдельно отслеживает только переменные и
@@ -51,7 +51,7 @@ examples/              ← standalone .py, можно запускать рук�
 └── python-tests.yml   ← pytest (триггер: push main, PR)
 ```
 
-## Шаг за шагом: добавить новый helper
+## Шаг за шагом: добавить вспомогательную функцию
 
 Допустим, хотите добавить `coverage_report(engine)` — отчёт о покрытии
 входного диапазона активными MF.
@@ -94,7 +94,7 @@ except ImportError:
     pass
 ```
 
-### 3. Добавьте type hints в `__init__.pyi`
+### 3. Добавьте аннотации типов в `__init__.pyi`
 
 ```python
 def coverage_report(engine: SugenoEngine, var: str, n_points: int = 100) -> dict: ...

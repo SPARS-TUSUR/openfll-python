@@ -169,7 +169,7 @@ def plot_mf(
     являются чёткими выходными значениями, а не нечёткими выходными множествами.
 
     Параметры:
-        engine: Экземпляр ``openfll.SugenoEngine``, настроенный через публичный API.
+        engine: Экземпляр ``openfll.BaseLinearEngine``, настроенный через публичный API.
         variables: Имя одной переменной, последовательность имён или ``None``
             для построения всех переменных.
         variable_type: Фильтр переменных: ``"input"``, ``"output"`` или
@@ -203,7 +203,7 @@ def plot_mf(
     definitions_by_variable = _MEMBERSHIP_FUNCTIONS.get(engine, {})
     if not roles:
         raise ValueError(
-            "No variables were registered through openfll.SugenoEngine; "
+            "No variables were registered through openfll.BaseLinearEngine; "
             "configure the engine before calling plot_mf"
         )
 

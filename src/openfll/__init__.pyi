@@ -4,7 +4,7 @@ openfll — пользовательский пакет. Во время вып�
 внутреннему backend-пакету PyFLL, который загружает PyFLL._core.
 """
 from pathlib import Path
-from typing import Any, List, Literal, Mapping, Sequence, Tuple, Union, overload
+from typing import Generic, TypeVar, Any, List, Literal, Mapping, Sequence, Tuple, Union, overload
 import numpy as np
 
 MfType = Literal[
@@ -63,8 +63,20 @@ class MembershipPlot:
     saved_path: Path | None
 
 
-class SugenoEngine:
-    """Плоский native-backed facade для модели нечеткой логики Сугено.
+class ModelView:
+    def calculate(self) -> None: ...
+    def save_to_string(self) -> str: ...
+    def save_to_file(self, path: str | Path) -> None: ...
+    def to_dict(self) -> dict[str, Any]: ...
+
+def load_from_string(json: str) -> SugenoEngine | MamdaniEngine: ...
+def load_from_file(path: str | Path) -> SugenoEngine | MamdaniEngine: ...
+
+_DefuzzerName = TypeVar("_DefuzzerName", bound=str, contravariant=True)
+
+
+class BaseLinearEngine(Generic[_DefuzzerName]):
+    """Общий линейный API моделей нечеткой логики Сугено и Мамдани.
 
     Жизненный цикл:
         До build() настраиваются переменные, membership-функции, правила и
@@ -143,6 +155,16 @@ class SugenoEngine:
         """Скомпилировать настроенную модель и перейти к execution lifecycle."""
         ...
 
+    def save_to_string(self) -> str: ...
+    def save_to_file(self, path: str | Path) -> None: ...
+    def to_dict(self) -> dict[str, Any]: ...
+    def model_ref(self) -> ModelView: ...
+    def set_defuzzer(self, name: _DefuzzerName) -> None: ...
+    def get_defuzzer(self) -> str: ...
+    def find_belonging(self, mf_name: str, value: float) -> float: ...
+    def get_input_var_names(self) -> list[str]: ...
+    def get_output_var_names(self) -> list[str]: ...
+
     def set_input(self, name: str, value: float) -> None:
         """Задать значение input-переменной после build()."""
         ...
@@ -166,14 +188,6 @@ class SugenoEngine:
     def predict(
         self,
         inputs: Sequence[float] | Sequence[Sequence[float]] | np.ndarray,
-        output_name: str | None = None,
-        *,
-        input_names: Sequence[str] | None = None,
-    ) -> float | np.ndarray: ...
-
-    def predict(
-        self,
-        inputs: Any,
         output_name: str | None = None,
         *,
         input_names: Sequence[str] | None = None,
@@ -230,11 +244,23 @@ class SugenoEngine:
 
 
 # ============================================================================
+class SugenoEngine(BaseLinearEngine[Literal["wtaver", "wtsum"]]):
+    def __init__(self) -> None: ...
+    def set_defuzzer(self, name: Literal["wtaver", "wtsum"]) -> None: ...
+    def get_defuzzer(self) -> Literal["wtaver", "wtsum"]: ...
+
+
+class MamdaniEngine(BaseLinearEngine[Literal["centroid"]]):
+    def __init__(self) -> None: ...
+    def set_defuzzer(self, name: Literal["centroid"]) -> None: ...
+    def get_defuzzer(self) -> Literal["centroid"]: ...
+    def set_integrator(self, start: float, end: float, step: float) -> None: ...
+
 # Python-only helpers (submodule `openfll._helpers`).
 # Сигнатуры ниже — ручные type hints; runtime-импорт через `openfll.__init__`.
 # ============================================================================
 def plot_mf(
-    engine: SugenoEngine,
+    engine: BaseLinearEngine,
     variables: str | Sequence[str] | None = None,
     *,
     variable_type: Literal["all", "input", "output"] = "all",
@@ -246,14 +272,14 @@ def plot_mf(
 
 
 def monte_carlo(
-    engine: SugenoEngine,
+    engine: BaseLinearEngine,
     var_inputs: list[tuple[str, tuple[float, float]]],
     var_outputs: list[str],
     n_samples: int = 1000,
     seed: int | None = None,
 ) -> list[dict[str, float]]: ...
 def grid_2d(
-    engine: SugenoEngine,
+    engine: BaseLinearEngine,
     x_var: str,
     y_var: str,
     x_range: tuple[float, float],
@@ -262,7 +288,7 @@ def grid_2d(
     n: int = 20,
 ) -> tuple[list[float], list[float], list[list[float]]]: ...
 def check_output_finite(
-    engine: SugenoEngine,
+    engine: BaseLinearEngine,
     var_inputs: list[tuple[str, tuple[float, float]]],
     var_outputs: list[str],
     n_samples: int = 1000,

@@ -4,6 +4,9 @@ __pycache__/
 *$py.class
 *.so
 .Python
+.venv-serialization/
+# Патчи закрытого C++-репозитория остаются локальными.
+backend-patches/*.patch
 build/
 develop-eggs/
 dist/

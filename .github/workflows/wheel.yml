@@ -36,7 +36,7 @@ jobs:
         with:
           repository: SPARS-TUSUR/fuzzy-logic-library
           # Pin the reviewed backend revision so release builds are reproducible.
-          ref: e49109aabdb37cadadb2cee487e9b6f39261f6fa
+          ref: 151ad1d692e999a374b53b82afb0fc8c792ebc35
           path: fuzzy-logic-library
           submodules: recursive
           token: ${{ secrets.OPENFLL_BACKEND_TOKEN_SECRET || github.token }}
@@ -131,11 +131,22 @@ jobs:
             throw "PyFLL.pyi was not produced."
           }
 
-          Remove-Item -LiteralPath "src/PyFLL" -Recurse -Force -ErrorAction SilentlyContinue
-          New-Item -ItemType Directory -Path "src/PyFLL" | Out-Null
+          # Проверяем путь и заменяем только старые нативные файлы.
+          $backendDir = (Resolve-Path "src/PyFLL").Path
+          Get-ChildItem -LiteralPath $backendDir -File |
+            Where-Object { $_.Extension -in ".pyd", ".dll" } |
+            Remove-Item -Force
           Copy-Item "fuzzy-logic-library/src/PyFLL/__init__.py" "src/PyFLL/"
           Copy-Item $stub.FullName "src/PyFLL/"
+          Copy-Item $stub.FullName "src/PyFLL/__init__.pyi"
+          Copy-Item $stub.FullName "src/openfll/PyFLL.pyi"
           Copy-Item $core.FullName "src/PyFLL/"
+
+          $buildInfoPath = "src/PyFLL/backend_build.json"
+          $buildInfo = Get-Content -LiteralPath $buildInfoPath -Raw | ConvertFrom-Json
+          $buildInfo.python = python -c "import platform; print(platform.python_version())"
+          $buildInfo.soabi = "cp314-win_amd64"
+          $buildInfo | ConvertTo-Json | Set-Content -LiteralPath $buildInfoPath -Encoding utf8
 
           Get-ChildItem $core.DirectoryName -Filter "*.dll" -ErrorAction SilentlyContinue |
             Copy-Item -Destination "src/PyFLL/"
@@ -154,7 +165,9 @@ jobs:
           if ($wheel.Count -ne 1) {
             throw "Expected exactly one wheel, found $($wheel.Count)."
           }
-          if ($wheel.Name -notmatch '^openfll_python-0\.2\.0-cp314-cp314-win_amd64\.whl$') {
+          $version = python -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])"
+          $expectedWheelName = "openfll_python-$version-cp314-cp314-win_amd64.whl"
+          if ($wheel.Name -ne $expectedWheelName) {
             throw "Unexpected wheel name: $($wheel.Name)"
           }
           python -m twine check $wheel.FullName
@@ -166,13 +179,14 @@ jobs:
           python -m pip install --force-reinstall $wheel
           python -m pip install "pytest>=7.0" "scikit-learn>=1.3.0" "openpyxl>=3.1,<4" "matplotlib>=3.8" "simpful==2.12.0"
           python -m pytest tests -v
-          python -c "from importlib.metadata import version; assert version('openfll_python') == '0.2.0'"
+          python -c "from importlib.metadata import version; import tomllib; assert version('openfll_python') == tomllib.load(open('pyproject.toml', 'rb'))['project']['version']"
           python -c "import openfll, PyFLL; assert PyFLL.SugenoEngine.__module__ == 'PyFLL._core'"
+          python examples/05_serialization_demo.py --output-dir build/demo_models
 
       - name: Upload wheel artifact
         uses: actions/upload-artifact@v4
         with:
-          name: openfll-python-0.2.0-cp314-win-amd64
+          name: openfll-python-cp314-win-amd64
           path: wheelhouse/*.whl
           if-no-files-found: error
           retention-days: 14
@@ -188,7 +202,7 @@ jobs:
       - name: Download wheel artifact
         uses: actions/download-artifact@v4
         with:
-          name: openfll-python-0.2.0-cp314-win-amd64
+          name: openfll-python-cp314-win-amd64
           path: dist
 
       - name: Attach wheel
@@ -211,7 +225,7 @@ jobs:
       - name: Download wheel artifact
         uses: actions/download-artifact@v4
         with:
-          name: openfll-python-0.2.0-cp314-win-amd64
+          name: openfll-python-cp314-win-amd64
           path: dist
 
       - name: Publish to TestPyPI
@@ -235,7 +249,7 @@ jobs:
       - name: Download wheel artifact
         uses: actions/download-artifact@v4
         with:
-          name: openfll-python-0.2.0-cp314-win-amd64
+          name: openfll-python-cp314-win-amd64
           path: dist
 
       - name: Publish to PyPI

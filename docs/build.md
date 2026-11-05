@@ -16,7 +16,7 @@ MSVC-Python 3.10 тоже подойдёт, но требует `libstdc++-6.dll
 - CMake 3.30+
 - Git (для submodule `vendor/pybind11`)
 - Python 3.10 (для `pip install pybind11-stubgen` и запуска Python-тестов)
-- Опционально: `pip install mkdocs mkdocs-material mkdocstrings[python]` (для документации)
+- Опционально: `python -m pip install -r docs/requirements.txt` (для документации)
 
 ## Сборка C++ (Debug + MinGW)
 
@@ -76,13 +76,14 @@ cmake --build build --target compressor_run
 # Установить pip-пакеты для документации
 scripts\setup_docs.bat
 # или вручную:
-pip install mkdocs mkdocs-material "mkdocstrings[python]" pybind11-stubgen
+python -m pip install -r docs/requirements.txt
+python -m pip install pybind11-stubgen
 ```
 
 ### Каждый раз: сборка и просмотр
 
 ```powershell
-# Live preview с hot-reload — http://127.0.0.1:8000
+# Предпросмотр с автоматическим обновлением — http://127.0.0.1:8000
 scripts\serve_docs.bat
 
 # Сгенерировать статический HTML в site/ (для GitHub Pages)
@@ -104,7 +105,7 @@ scripts\gen_stubs.bat
   - Сборка (`docs/build.md`)
   - Contributing (`docs/contributing.md`)
 
-### Pipeline стабов
+### Порядок генерации файлов типизации
 
 Источник истины: `R"doc()"` в `src/PyFLL/PyFLL.cpp`.
 
@@ -134,12 +135,12 @@ D:/repos/FLL/build/compressor_run.exe
 # C++ сам найдёт <repo>/tests/python/data/ по argv[0]
 ```
 
-### `DLL load failed while importing PyFLL`
+### Ошибка загрузки DLL: `DLL load failed while importing PyFLL`
 
 `PyFLL.pyd` собран в Debug, а Python — Release (или наоборот). Решение: используйте
 **Release**-сборку (Debug-Python требует `python310_d.dll`, которого обычно нет).
 
-### `ModuleNotFoundError: No module named 'PyFLL'`
+### Модуль PyFLL не найден: `ModuleNotFoundError: No module named 'PyFLL'`
 
 Python не находит `.pyd`. Добавьте путь:
 
@@ -151,3 +152,22 @@ sys.path.insert(0, r'D:/repos/FLL/build_release/src/PyFLL')
 
 Известный constexpr-регресс в `utils/registry/registry.h`. Используйте MinGW,
 пока не починим ядро. CI настроен на GCC primary, MSVC — best-effort.
+
+
+### Одинаковое окружение документации локально и в CI
+
+GitHub Actions собирает документацию на Python 3.10 без компиляции C++.
+Для воспроизведения используйте отдельное окружение этого Python:
+
+```powershell
+python -m venv .venv-docs
+./.venv-docs/Scripts/python.exe -m pip install -r docs/requirements.txt
+./.venv-docs/Scripts/python.exe -m pip check
+./.venv-docs/Scripts/python.exe -m mkdocs build --strict
+```
+
+Версии инструментов закреплены в `docs/requirements.txt`. Установка последних
+версий без ограничений может дать несовместимую связку: `mkdocstrings 1.0.6`
+вызывает конструктор подсветки без аргумента `md`, обязательного в
+`pymdown-extensions 12`. Проверенная версия подсветки — `10.16.1`.
+Проверка импорта без расширения и строгая сборка документации остаются в CI.

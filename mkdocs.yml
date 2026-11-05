@@ -73,18 +73,20 @@ nav:
     - tutorials/index.md
     - Первый движок: tutorials/01-first-engine.md
     - Управление компрессором: tutorials/02-fuzzy-arithmetic.md
-    - (Mamdani — будущее): tutorials/03-mamdani.md
+    - Mamdani: tutorials/03-mamdani.md
   - API:
     - api/index.md
     - SugenoEngine: api/sugeno-engine.md
+    - Сериализация и расширения: api/serialization.md
   - Архитектура:
     - architecture/index.md
     - Linear Facade: architecture/linear-facade.md
     - Python API план: architecture/python-api-plan.md
     - Отчёты по фазам: architecture/phase-reports.md
   - Сборка: build.md
-  - Contributing: contributing.md
-  - Contributing (Python API): contributing-python-api.md
+  - Проверка архива: ARCHIVE_INSTRUCTIONS.md
+  - Участие в разработке: contributing.md
+  - Разработка Python API: contributing-python-api.md
 
 # Не включено в навигацию:
 # - requirements.docx (наш внутренний документ с обсуждением, не для публикации)

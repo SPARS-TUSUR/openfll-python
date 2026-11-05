@@ -3,6 +3,24 @@
 Дистрибутив публикуется на PyPI под именем `openfll_python`. После установки
 пользователь импортирует пакет как `openfll`.
 
+## Расширения сериализации 0.3.0.dev1
+
+Ветка `python-serialization` добавляет сохранение/загрузку моделей, MamdaniEngine,
+выбор дефаззификатора, представление ModelView и сведения о переменных. Подробности —
+в [описании API](docs/api/serialization.md).
+
+Подготовка PR сохраняет настройки последнего релиза из `main`: имя
+`openfll_python`, официальный Windows CPython 3.14, публикацию через OIDC и
+секрет `OPENFLL_BACKEND_TOKEN_SECRET`. Расширения C++ получаются из закрытого
+репозитория по закреплённому коммиту; его исходники в публичный репозиторий
+не копируются. Старый архив с MSYS2-сборкой остаётся отдельным локальным
+снимком результатов, а сценарий выпуска формирует wheel `win_amd64`.
+
+Локально собран и установлен `openfll_python-0.3.0.dev1-cp314-cp314-win_amd64.whl`
+для официального CPython 3.14.7. Проверки этой сборки: 118 C++-тестов и
+106 Python-тестов успешно пройдены, включая сравнение с `simpful`; пример
+сохранения и восстановления обеих моделей также прошёл.
+
 Версия 0.2.0 поддерживает только:
 
 - 64-разрядную Windows;
@@ -34,7 +52,7 @@ Workflow сначала собирает wheel, затем устанавлив�
 ## Доступ к приватному backend
 
 Workflow клонирует `SPARS-TUSUR/fuzzy-logic-library` на зафиксированном commit
-`e49109aabdb37cadadb2cee487e9b6f39261f6fa` из ветки `python/pybind`. Это
+`047e77794458a844047e45c483ff37715edab303` из ветки `python-serialization`. Это
 делает release-сборку воспроизводимой. Если стандартный `GITHUB_TOKEN` не имеет
 доступа к соседнему приватному репозиторию, в настройках `openfll-python` нужно
 создать Actions secret `OPENFLL_BACKEND_TOKEN_SECRET`. Значением должен быть
@@ -91,10 +109,10 @@ CPython 3.14 с python.org. Ожидаемое имя native-модуля —
 ### Сборка backend
 
 ```powershell
-git clone --branch python/pybind --recurse-submodules `
+git clone --branch python-serialization --recurse-submodules `
   https://github.com/SPARS-TUSUR/fuzzy-logic-library.git `
   ..\fuzzy-logic-library
-git -C ..\fuzzy-logic-library checkout e49109aabdb37cadadb2cee487e9b6f39261f6fa
+git -C ..\fuzzy-logic-library checkout 047e77794458a844047e45c483ff37715edab303
 $patchFile = (Resolve-Path .\packaging\cpython-windows.patch).Path
 git -C ..\fuzzy-logic-library apply $patchFile
 
@@ -156,10 +174,10 @@ python -m pytest tests -v
 Ожидаемый файл:
 
 ```text
-openfll_python-0.2.0-cp314-cp314-win_amd64.whl
+openfll_python-0.3.0.dev1-cp314-cp314-win_amd64.whl
 ```
 
-## Выпуск версии 0.2.0 после проверки
+## Выпуск новой версии после проверки
 
 Ветка с подготовкой релиза должна сначала пройти review и быть объединена с
 `main`. После этого:
@@ -167,8 +185,8 @@ openfll_python-0.2.0-cp314-cp314-win_amd64.whl
 1. Вручную запустить workflow с `publish_target=none`.
 2. После успешной сборки запустить его с `publish_target=testpypi`.
 3. Проверить установку из TestPyPI на Windows с CPython 3.14.
-4. Создать тег `v0.2.0` на проверенном commit из `main`.
-5. Создать и опубликовать GitHub Release для `v0.2.0`.
+4. Установить согласованный номер выпуска в `pyproject.toml` и создать соответствующий тег `v<версия>` на проверенном коммите из `main`.
+5. Создать и опубликовать GitHub Release для этого тега.
 6. Подтвердить deployment в GitHub Environment `pypi`.
 
 Повторно загрузить на PyPI файл с теми же именем и версией нельзя. Если после

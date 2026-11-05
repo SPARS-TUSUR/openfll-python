@@ -1,12 +1,14 @@
-# API Reference
+# Справочник API
 
 Автогенерированная документация для публичного пакета `openfll`.
 
 ## Доступные классы
 
 - **[`SugenoEngine`](sugeno-engine.md)** — линейная обёртка над Sugeno-моделью OpenFLL
+- **[`MamdaniEngine`](../tutorials/03-mamdani.md)** — модель Мамдани с centroid-дефаззификацией.
+- **[`ModelView`, сохранение и загрузка](serialization.md)** — нативный JSON и доступ к построенной модели.
 
-## Helper-функции
+## Вспомогательные функции
 
 - `constant(value)` → `[value]`
 - `triangular(a, b, c)` → `[a, b, c]`
@@ -38,7 +40,7 @@ axes = plots["x1"].axes
 triangular, trapezoidal и gaussian функций. Matplotlib подключается только при
 вызове; установите extra `openfll_python[plot]`.
 
-## Scalar predict
+## Одиночный расчёт через predict
 
 `engine.predict(inputs, output_name=None)` выполняет один scalar inference через
 существующий native workflow:
@@ -59,7 +61,7 @@ outputs несколько, передайте `output_name` явно.
   сохраняет свой текущий exception contract;
 - ошибки lifecycle до `build()` остаются native `RuntimeError`.
 
-## Native batch predict
+## Нативный пакетный расчёт {#native-batch-predict}
 
 `engine.predict_batch(X, input_names=[...])` вызывает native C++ batch loop из
 `PyFLL._core`. Это не Python loop по samples.
@@ -93,7 +95,7 @@ shape равен `(n_samples,)`, dtype — `float64`.
 - **Важно**: `polynomial`, `fit`, `get_params` и `set_params`
   не входят в текущий публичный API.
 
-## Пример типичного API reference
+## Пример справочника API
 
 ```python
 import openfll

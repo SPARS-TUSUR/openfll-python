@@ -1,0 +1,10 @@
+{
+  "upstream_repository": "SPARS-TUSUR/fuzzy-logic-library",
+  "upstream_branch": "python-serialization",
+  "upstream_commit": "151ad1d692e999a374b53b82afb0fc8c792ebc35",
+  "upstream_base_commit": "4b2bfe286d131065092e2a5932b3bc0b777d0b0f",
+  "development_branch": "python-serialization",
+  "python": "3.14.7",
+  "soabi": "cp314-mingw_x86_64_ucrt_gnu",
+  "compiler": "GCC UCRT 16.2.0"
+}

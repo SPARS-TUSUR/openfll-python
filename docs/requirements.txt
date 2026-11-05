@@ -1,0 +1,10 @@
+# Проверенная связка для сборки документации на Python 3.10 без нативного расширения.
+# pymdown-extensions 12 меняет интерфейс Highlight; mkdocstrings 1.0.6 ожидает прежний.
+mkdocs==1.6.1
+mkdocs-material==9.7.7
+mkdocstrings[python]==1.0.6
+mkdocstrings-python==2.0.9
+pymdown-extensions==10.16.1
+Markdown==3.10.3
+griffelib==2.3.0
+mkdocs-autorefs==1.4.4
