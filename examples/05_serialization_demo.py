@@ -51,10 +51,10 @@ def main():
         np.testing.assert_allclose(restored_text.predict(points), expected, rtol=1e-12, atol=1e-12)
         np.testing.assert_allclose(restored_file.predict(points), expected, rtol=1e-12, atol=1e-12)
         print(f"{type(engine).__name__} ({kind}): {expected.tolist()}")
-        print(f"  Входы={restored_file.get_input_var_names()}, выходы={restored_file.get_output_var_names()}")
+        print(f"  Inputs={restored_file.get_input_var_names()}, outputs={restored_file.get_output_var_names()}")
         print(f"  cold(3)={engine.find_belonging('cold', 3):.6f}; JSON={path.resolve()}")
-        print("  Сохранение и восстановление через строку и файл: успешно")
-    print("Все проверки нативной сериализации успешно пройдены.")
+        print("  Serialization and deserialization via string and file: success")
+    print("All native serialization checks passed successfully.")
 
 
 if __name__ == "__main__":
