@@ -117,7 +117,7 @@ def test_coverage_report_full_coverage(sugno_engine_2in_1out):
 
 ```bash
 cd openfll-python
-pip install -e .            # редактируемая установка (или `pip install openfll_python==0.2.0`)
+pip install -e .            # редактируемая установка (или `pip install openfll-python`)
 pytest tests/ -v            # все тесты должны быть зелёными
 python examples/01_basic.py # sanity-check базового API
 ```
@@ -159,11 +159,11 @@ git push origin feature/coverage-report
 
 ## Что делать, когда C++ колесо обновилось
 
-Когда maintainer C++ ядра выпустит новый wheel (например, v0.2.0 с новым
+Когда maintainer C++ ядра выпустит новый wheel (например, v0.3.0 с новым
 методом `SugenoEngine.get_input_var_names()`):
 
 ```bash
-pip install --upgrade openfll_python==0.2.0
+pip install --upgrade openfll-python==0.3.0
 ```
 
 Ваши helpers, использующие новые методы, сразу заработают. Старый код
