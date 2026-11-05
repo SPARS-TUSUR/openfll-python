@@ -41,7 +41,8 @@ jobs:
 
       - name: Install tools
         run: |
-          pip install --quiet mkdocs mkdocs-material "mkdocstrings[python]"
+          python -m pip install --no-compile --requirement docs/requirements.txt
+          python -m pip check
 
       - name: Check import without native extension
         env:

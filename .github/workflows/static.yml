@@ -33,8 +33,8 @@ jobs:
 
       - name: Install tools
         run: |
-          pip install --quiet mkdocs mkdocs-material "mkdocstrings[python]"
-          pip install --no-deps -e . || true
+          python -m pip install --no-compile --requirement docs/requirements.txt
+          python -m pip check
 
       - name: Build docs
         run: mkdocs build --strict
