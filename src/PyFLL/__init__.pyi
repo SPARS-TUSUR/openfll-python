@@ -46,6 +46,13 @@ SNorms = Literal[
     "hamacher_sum",
 ]
 
+# Loss function names for GA optimization
+LossType = Literal[
+    "mse",
+    "rmse",
+    "mae",
+]
+
 
 # ============================================================================
 # SugenoEngine — the main public class
@@ -81,7 +88,10 @@ class BaseLinearEngine(Generic[_DefuzzerName]):
     def model_ref(self) -> ModelView: ...
     def set_defuzzer(self, name: _DefuzzerName) -> None: ...
     def get_defuzzer(self) -> str: ...
+    @overload
     def find_belonging(self, mf_name: str, value: float) -> float: ...
+    @overload
+    def find_belonging(self, var_name: str, mf_name: str, value: float) -> float: ...
     def get_input_var_names(self) -> list[str]: ...
     def get_output_var_names(self) -> list[str]: ...
 
@@ -313,6 +323,60 @@ class BaseLinearEngine(Generic[_DefuzzerName]):
                 names, or incomplete input_names.
             IndexError: an input name is unknown.
             RuntimeError: called before build() or unsupported output config.
+        """
+        ...
+
+    @overload
+    def set_mf_bounds(self, mf_name: str, bounds: Sequence[Tuple[float, float]]) -> None: ...
+    @overload
+    def set_mf_bounds(self, var_name: str, mf_name: str, bounds: Sequence[Tuple[float, float]]) -> None:
+        """Set parameter search bounds for a membership function.
+
+        Args:
+            var_name: Name of variable to which the membership function belongs.
+            mf_name: Name of a registered membership function.
+            bounds: Sequence of (lower, upper) pairs matching mf param count.
+
+        Raises:
+            IndexError: mf_name is unknown.
+            ValueError: bounds count mismatch or invalid range.
+        """
+        ...
+
+    def fit_ga(
+        self,
+        X: object,
+        y: object,
+        *,
+        input_names: Sequence[str],
+        population_size: int = 50,
+        generations: int = 100,
+        crossover_rate: float = 0.8,
+        mutation_rate: float = 0.15,
+        mutation_sigma: float = 0.1,
+        tournament_size: int = 3,
+        elitism_count: int = 2,
+        loss: LossType = "mse",
+        seed: int = 42,
+    ) -> List[float]:
+        """Optimize membership function parameters using a Genetic Algorithm.
+
+        Args:
+            X: 2D NumPy array with shape (n_samples, n_features).
+            y: 1D NumPy array with shape (n_samples,).
+            input_names: Sequence of strings specifying input variable names corresponding to X columns.
+            population_size: Number of chromosomes in GA population (default: 50).
+            generations: Number of evolution epochs (default: 100).
+            crossover_rate: BLX-alpha crossover probability (default: 0.8).
+            mutation_rate: Gene mutation probability (default: 0.15).
+            mutation_sigma: Mutation step size as fraction of range (default: 0.1).
+            tournament_size: Tournament selection size (default: 3).
+            elitism_count: Number of best individuals preserved unconditionally (default: 2).
+            loss: "mse" | "rmse" | "mae" (default: "mse").
+            seed: Random seed for deterministic reproducibility (default: 42).
+
+        Returns:
+            List of float: Best loss history per generation of length `generations`.
         """
         ...
 

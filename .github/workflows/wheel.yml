@@ -20,10 +20,14 @@ on:
 
 jobs:
   build_wheel:
-    name: Build and test Windows / CPython 3.14 wheel
+    name: Build and test Windows / CPython ${{ matrix.python-version }} wheel
     runs-on: windows-latest
     permissions:
       contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.13", "3.14"]
     env:
       PYTHONUTF8: "1"
       PYTHONIOENCODING: "utf-8"
@@ -39,15 +43,15 @@ jobs:
         with:
           repository: SPARS-TUSUR/fuzzy-logic-library
           # Pin the reviewed backend revision so release builds are reproducible.
-          ref: 151ad1d692e999a374b53b82afb0fc8c792ebc35
+          ref: c6017c278c5b6e765174c7f1d65b9d540b5e7564
           path: fuzzy-logic-library
           submodules: recursive
           token: ${{ secrets.OPENFLL_BACKEND_TOKEN_SECRET || github.token }}
 
-      - name: Set up CPython 3.14 x64
+      - name: Set up CPython ${{ matrix.python-version }} x64
         uses: actions/setup-python@v6
         with:
-          python-version: "3.14"
+          python-version: ${{ matrix.python-version }}
           architecture: x64
 
       - name: Set up UCRT64 GCC toolchain
@@ -121,14 +125,16 @@ jobs:
       - name: Assemble bundled PyFLL backend package
         shell: pwsh
         run: |
+          $pyTag = python -c "import sys; print(f'cp{sys.version_info.major}{sys.version_info.minor}')"
+          $soabi = "${pyTag}-win_amd64"
           $buildRoot = "fuzzy-logic-library/build_release/src/PyFLL"
-          $core = Get-ChildItem $buildRoot -Recurse -Filter "_core.cp314-win_amd64.pyd" |
+          $core = Get-ChildItem $buildRoot -Recurse -Filter "_core.$soabi.pyd" |
             Select-Object -First 1
           $stub = Get-ChildItem $buildRoot -Recurse -Filter "PyFLL.pyi" |
             Select-Object -First 1
 
           if (-not $core) {
-            throw "CPython 3.14 win_amd64 backend was not produced."
+            throw "CPython $pyTag win_amd64 backend was not produced."
           }
           if (-not $stub) {
             throw "PyFLL.pyi was not produced."
@@ -148,7 +154,7 @@ jobs:
           $buildInfoPath = "src/PyFLL/backend_build.json"
           $buildInfo = Get-Content -LiteralPath $buildInfoPath -Raw | ConvertFrom-Json
           $buildInfo.python = python -c "import platform; print(platform.python_version())"
-          $buildInfo.soabi = "cp314-win_amd64"
+          $buildInfo.soabi = $soabi
           $buildInfo | ConvertTo-Json | Set-Content -LiteralPath $buildInfoPath -Encoding utf8
 
           Get-ChildItem $core.DirectoryName -Filter "*.dll" -ErrorAction SilentlyContinue |
@@ -169,9 +175,10 @@ jobs:
             throw "Expected exactly one wheel, found $($wheel.Count)."
           }
           $version = python -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])"
-          $expectedWheelName = "openfll_python-$version-cp314-cp314-win_amd64.whl"
+          $pyTag = python -c "import sys; print(f'cp{sys.version_info.major}{sys.version_info.minor}')"
+          $expectedWheelName = "openfll_python-$version-$pyTag-$pyTag-win_amd64.whl"
           if ($wheel.Name -ne $expectedWheelName) {
-            throw "Unexpected wheel name: $($wheel.Name)"
+            throw "Unexpected wheel name: $($wheel.Name) (expected $expectedWheelName)"
           }
           python -m twine check $wheel.FullName
 
@@ -189,7 +196,7 @@ jobs:
       - name: Upload wheel artifact
         uses: actions/upload-artifact@v4
         with:
-          name: openfll-python-cp314-win-amd64
+          name: openfll-python-${{ matrix.python-version }}-win-amd64
           path: wheelhouse/*.whl
           if-no-files-found: error
           retention-days: 14
@@ -202,13 +209,14 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name: Download wheel artifact
+      - name: Download wheel artifacts
         uses: actions/download-artifact@v4
         with:
-          name: openfll-python-cp314-win-amd64
+          pattern: openfll-python-*-win-amd64
           path: dist
+          merge-multiple: true
 
-      - name: Attach wheel
+      - name: Attach wheels
         uses: softprops/action-gh-release@v2
         with:
           files: dist/*.whl
@@ -225,11 +233,12 @@ jobs:
       contents: read
       id-token: write
     steps:
-      - name: Download wheel artifact
+      - name: Download wheel artifacts
         uses: actions/download-artifact@v4
         with:
-          name: openfll-python-cp314-win-amd64
+          pattern: openfll-python-*-win-amd64
           path: dist
+          merge-multiple: true
 
       - name: Publish to TestPyPI
         uses: pypa/gh-action-pypi-publish@release/v1
@@ -249,11 +258,12 @@ jobs:
       contents: read
       id-token: write
     steps:
-      - name: Download wheel artifact
+      - name: Download wheel artifacts
         uses: actions/download-artifact@v4
         with:
-          name: openfll-python-cp314-win-amd64
+          pattern: openfll-python-*-win-amd64
           path: dist
+          merge-multiple: true
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
