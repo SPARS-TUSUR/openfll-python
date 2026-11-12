@@ -23,7 +23,7 @@
 
 ## Установка
 
-Версия 0.3.1 распространяется как бинарный wheel для 64-разрядной Windows и Linux (включая Google Colab) под CPython 3.13 и 3.14:
+Версия 0.3.2 распространяется как бинарный wheel для 64-разрядной Windows и Linux (включая Google Colab) под CPython 3.13 и 3.14:
 
 ```bash
 pip install openfll-python
