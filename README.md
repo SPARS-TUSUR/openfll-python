@@ -8,7 +8,7 @@
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)]()
 [![Python](https://img.shields.io/badge/python-3.13%20%7C%203.14-blue.svg)]()
-[![Platform](https://img.shields.io/badge/platform-Windows-lightgrey.svg)]()
+[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey.svg)]()
 [![Tests](https://img.shields.io/badge/tests-90%20passed-brightgreen.svg)]()
 
 ---
@@ -23,10 +23,9 @@
 
 ## Установка
 
-Версия 0.3.1 распространяется как бинарный wheel для 64-разрядной Windows и
-CPython 3.13 и 3.14:
+Версия 0.3.1 распространяется как бинарный wheel для 64-разрядной Windows и Linux (включая Google Colab) под CPython 3.13 и 3.14:
 
-```powershell
+```bash
 pip install openfll-python
 ```
 

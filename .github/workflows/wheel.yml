@@ -19,8 +19,8 @@ on:
     types: [published]
 
 jobs:
-  build_wheel:
-    name: Build and test Windows / CPython ${{ matrix.python-version }} wheel
+  build_windows_wheel:
+    name: Build Windows / CPython ${{ matrix.python-version }} wheel
     runs-on: windows-latest
     permissions:
       contents: read
@@ -43,7 +43,7 @@ jobs:
         with:
           repository: SPARS-TUSUR/fuzzy-logic-library
           # Pin the reviewed backend revision so release builds are reproducible.
-          ref: c6017c278c5b6e765174c7f1d65b9d540b5e7564
+          ref: c83d87d1864fd57b9efce006ae33f9ee0b11dbe0
           path: fuzzy-logic-library
           submodules: recursive
           token: ${{ secrets.OPENFLL_BACKEND_TOKEN_SECRET || github.token }}
@@ -196,15 +196,151 @@ jobs:
       - name: Upload wheel artifact
         uses: actions/upload-artifact@v4
         with:
-          name: openfll-python-${{ matrix.python-version }}-win-amd64
+          name: openfll-python-windows-${{ matrix.python-version }}
+          path: wheelhouse/*.whl
+          if-no-files-found: error
+          retention-days: 14
+
+  build_linux_wheel:
+    name: Build Linux / CPython ${{ matrix.python-version }} wheel
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.13", "3.14"]
+    env:
+      PYTHONUTF8: "1"
+      PYTHONIOENCODING: "utf-8"
+
+    steps:
+      - name: Checkout Python package
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Checkout private C++ backend
+        uses: actions/checkout@v4
+        with:
+          repository: SPARS-TUSUR/fuzzy-logic-library
+          # Pin the reviewed backend revision so release builds are reproducible.
+          ref: c83d87d1864fd57b9efce006ae33f9ee0b11dbe0
+          path: fuzzy-logic-library
+          submodules: recursive
+          token: ${{ secrets.OPENFLL_BACKEND_TOKEN_SECRET || github.token }}
+
+      - name: Set up CPython ${{ matrix.python-version }} x64
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+          architecture: x64
+
+      - name: Install build tools and auditwheel
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build build-essential patchelf
+
+      - name: Validate release metadata
+        run: |
+          projectName=$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['name'])")
+          version=$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])")
+
+          if [ "$projectName" != "openfll_python" ]; then
+            echo "Unexpected distribution name: $projectName"
+            exit 1
+          fi
+
+          if [ "${{ github.event_name }}" = "release" ]; then
+            expectedTag="v$version"
+            actualTag="${{ github.event.release.tag_name }}"
+            if [ "$actualTag" != "$expectedTag" ]; then
+              echo "Release tag $actualTag does not match package version $version (expected $expectedTag)."
+              exit 1
+            fi
+          fi
+
+      - name: Configure native backend with GCC
+        run: |
+          pythonExe="$(which python)"
+          cmake \
+            -S fuzzy-logic-library \
+            -B fuzzy-logic-library/build_release \
+            -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER=gcc \
+            -DCMAKE_CXX_COMPILER=g++ \
+            -DCMAKE_CXX_FLAGS="-static-libgcc -static-libstdc++" \
+            -DCMAKE_MAKE_PROGRAM=ninja \
+            -DPython3_EXECUTABLE="$pythonExe" \
+            -DOPENFLL_BUILD_BENCHMARKS=OFF
+
+      - name: Build and test C++ core and native backend
+        run: |
+          cmake \
+            --build fuzzy-logic-library/build_release \
+            --target unit_tests PyFLL \
+            --parallel 4
+          fuzzy-logic-library/build_release/tests/unit_tests --gtest_brief=1
+
+      - name: Assemble bundled PyFLL backend package
+        run: |
+          buildRoot="fuzzy-logic-library/build_release/src/PyFLL"
+          core=$(find "$buildRoot" -name "_core.*.so" | head -n 1)
+          stub="$buildRoot/PyFLL.pyi"
+
+          if [ -z "$core" ]; then
+            echo "Linux native backend was not produced."
+            exit 1
+          fi
+
+          rm -f src/PyFLL/*.pyd src/PyFLL/*.so src/PyFLL/*.dll
+          cp fuzzy-logic-library/src/PyFLL/__init__.py src/PyFLL/
+          cp "$stub" src/PyFLL/
+          cp "$stub" src/PyFLL/__init__.pyi
+          cp "$stub" src/openfll/PyFLL.pyi
+          cp "$core" src/PyFLL/
+
+          python -c "
+          import json, platform, sysconfig
+          p = 'src/PyFLL/backend_build.json'
+          data = json.load(open(p))
+          data['python'] = platform.python_version()
+          data['soabi'] = sysconfig.get_config_var('SOABI')
+          json.dump(data, open(p, 'w'), indent=2)
+          "
+          ls -la src/PyFLL
+
+      - name: Build and repair Linux wheel
+        run: |
+          python -m pip install --upgrade build auditwheel twine
+          python -m build --wheel --outdir dist_raw
+          mkdir -p wheelhouse
+          auditwheel repair dist_raw/*.whl --wheel-dir wheelhouse/
+          python -m twine check wheelhouse/*.whl
+
+      - name: Install and test built wheel
+        run: |
+          wheel=$(ls wheelhouse/*.whl | head -n 1)
+          python -m pip install --force-reinstall "$wheel"
+          python -m pip install "pytest>=7.0" "scikit-learn>=1.3.0" "openpyxl>=3.1,<4" "matplotlib>=3.8" "simpful==2.12.0"
+          python -m pytest tests -v
+          python -c "from importlib.metadata import version; import tomllib; assert version('openfll_python') == tomllib.load(open('pyproject.toml', 'rb'))['project']['version']"
+          python -c "import openfll, PyFLL; assert PyFLL.SugenoEngine.__module__ == 'PyFLL._core'"
+          python examples/05_serialization_demo.py --output-dir build/demo_models
+
+      - name: Upload wheel artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: openfll-python-linux-${{ matrix.python-version }}
           path: wheelhouse/*.whl
           if-no-files-found: error
           retention-days: 14
 
   attach_release_assets:
-    name: Attach wheel to GitHub Release
+    name: Attach wheels to GitHub Release
     if: github.event_name == 'release' && github.event.action == 'published'
-    needs: build_wheel
+    needs: [build_windows_wheel, build_linux_wheel]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -212,7 +348,7 @@ jobs:
       - name: Download wheel artifacts
         uses: actions/download-artifact@v4
         with:
-          pattern: openfll-python-*-win-amd64
+          pattern: openfll-python-*
           path: dist
           merge-multiple: true
 
@@ -222,9 +358,9 @@ jobs:
           files: dist/*.whl
 
   publish_testpypi:
-    name: Publish wheel to TestPyPI
+    name: Publish wheels to TestPyPI
     if: github.event_name == 'workflow_dispatch' && inputs.publish_target == 'testpypi'
-    needs: build_wheel
+    needs: [build_windows_wheel, build_linux_wheel]
     runs-on: ubuntu-latest
     environment:
       name: testpypi
@@ -236,7 +372,7 @@ jobs:
       - name: Download wheel artifacts
         uses: actions/download-artifact@v4
         with:
-          pattern: openfll-python-*-win-amd64
+          pattern: openfll-python-*
           path: dist
           merge-multiple: true
 
@@ -247,9 +383,9 @@ jobs:
           skip-existing: true
 
   publish_pypi:
-    name: Publish wheel to PyPI
+    name: Publish wheels to PyPI
     if: github.event_name == 'release' && github.event.action == 'published'
-    needs: build_wheel
+    needs: [build_windows_wheel, build_linux_wheel]
     runs-on: ubuntu-latest
     environment:
       name: pypi
@@ -261,7 +397,7 @@ jobs:
       - name: Download wheel artifacts
         uses: actions/download-artifact@v4
         with:
-          pattern: openfll-python-*-win-amd64
+          pattern: openfll-python-*
           path: dist
           merge-multiple: true
 

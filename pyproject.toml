@@ -21,6 +21,7 @@ classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Science/Research",
     "Operating System :: Microsoft :: Windows",
+    "Operating System :: POSIX :: Linux",
     "Programming Language :: C++",
     "Programming Language :: Python :: 3.13",
     "Programming Language :: Python :: 3.14",
@@ -51,7 +52,6 @@ Issues = "https://github.com/SPARS-TUSUR/openfll-python/issues"
 # setuptools — какие файлы включать в wheel
 # ============================================================================
 [tool.setuptools]
-platforms = ["win_amd64"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

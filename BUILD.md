@@ -10,9 +10,9 @@
 
 Пакет поддерживает:
 
-- 64-разрядную Windows;
-- официальный CPython 3.13 и 3.14 с python.org;
-- wheels `cp313-cp313-win_amd64` и `cp314-cp314-win_amd64`.
+- 64-разрядную Windows и Linux (включая Google Colab / Ubuntu);
+- официальный CPython 3.13 и 3.14;
+- wheels `win_amd64` и `manylinux_2_28_x86_64` под Python 3.13 и 3.14.
 
 Исходники C++ находятся в закрытом репозитории
 [fuzzy-logic-library](https://github.com/SPARS-TUSUR/fuzzy-logic-library).
