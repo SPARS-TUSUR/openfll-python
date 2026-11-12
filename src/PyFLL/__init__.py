@@ -14,8 +14,10 @@ MfType = Literal["constant", "triangular", "trapezoidal", "gaussian", "polynomia
 TNorms = Literal["min", "prod_and", "bounded_diff", "drastic_prod", "einstein_prod", "hamacher_prod"]
 SNorms = Literal["max", "algebraic_sum", "bounded_sum", "drastic_sum", "einstein_sum", "hamacher_sum"]
 
+LossType = Literal["mse", "rmse", "mae"]
+
 __all__ = ["BaseLinearEngine", "SugenoEngine", "MamdaniEngine", "ModelView",
-           "load_from_file", "load_from_string", "MfType", "TNorms", "SNorms"]
+           "load_from_file", "load_from_string", "MfType", "TNorms", "SNorms", "LossType"]
 
 _BACKEND_IMPORT_ERROR: ImportError | None = None
 
@@ -139,11 +141,34 @@ if TYPE_CHECKING or _BACKEND_IMPORT_ERROR is not None:
             """Выполнить пакетный расчёт модели с одним выходом на массиве NumPy."""
             _native_unavailable()
 
+        def set_mf_bounds(self, *args: Any, **kwargs: Any) -> None:
+            """Установить границы поиска параметров для функции принадлежности."""
+            _native_unavailable()
+
+        def fit_ga(
+            self,
+            X: object,
+            y: object,
+            *,
+            input_names: Sequence[str],
+            population_size: int = 50,
+            generations: int = 100,
+            crossover_rate: float = 0.8,
+            mutation_rate: float = 0.15,
+            mutation_sigma: float = 0.1,
+            tournament_size: int = 3,
+            elitism_count: int = 2,
+            loss: LossType = "mse",
+            seed: int = 42,
+        ) -> list[float]:
+            """Оптимизировать параметры функций принадлежности генетическим алгоритмом."""
+            _native_unavailable()
+
         def is_built(self) -> bool:
             """Проверить, собрана ли модель."""
             _native_unavailable()
 
-        def find_belonging(self, mf_name: str, value: float) -> float:
+        def find_belonging(self, *args: Any, **kwargs: Any) -> float:
             """Вычислить степень принадлежности именованной MF.
 
             Имена сохраняются при загрузке JSON с метаданными линейного API.
