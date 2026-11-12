@@ -43,7 +43,7 @@ jobs:
         with:
           repository: SPARS-TUSUR/fuzzy-logic-library
           # Pin the reviewed backend revision so release builds are reproducible.
-          ref: c83d87d1864fd57b9efce006ae33f9ee0b11dbe0
+          ref: 0c7df7b4fbc4273beb0388667878d31472ab338e
           path: fuzzy-logic-library
           submodules: recursive
           token: ${{ secrets.OPENFLL_BACKEND_TOKEN_SECRET || github.token }}
@@ -66,12 +66,6 @@ jobs:
             mingw-w64-ucrt-x86_64-toolchain
             mingw-w64-ucrt-x86_64-cmake
             mingw-w64-ucrt-x86_64-ninja
-
-      - name: Apply official CPython compatibility patch
-        shell: pwsh
-        run: |
-          git -C fuzzy-logic-library apply --check ../packaging/cpython-windows.patch
-          git -C fuzzy-logic-library apply ../packaging/cpython-windows.patch
 
       - name: Validate release metadata
         shell: pwsh
@@ -225,7 +219,7 @@ jobs:
         with:
           repository: SPARS-TUSUR/fuzzy-logic-library
           # Pin the reviewed backend revision so release builds are reproducible.
-          ref: c83d87d1864fd57b9efce006ae33f9ee0b11dbe0
+          ref: 0c7df7b4fbc4273beb0388667878d31472ab338e
           path: fuzzy-logic-library
           submodules: recursive
           token: ${{ secrets.OPENFLL_BACKEND_TOKEN_SECRET || github.token }}
