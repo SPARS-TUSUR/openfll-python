@@ -225,6 +225,39 @@ class BaseLinearEngine(Generic[_DefuzzerName]):
         """
         ...
 
+    @overload
+    def set_mf_bounds(self, mf_name: str, bounds: Sequence[tuple[float, float]]) -> None: ...
+
+    @overload
+    def set_mf_bounds(
+        self, var_name: str, mf_name: str, bounds: Sequence[tuple[float, float]],
+    ) -> None:
+        """Задать допустимый диапазон каждого параметра зарегистрированной MF."""
+        ...
+
+    def fit_ga(
+        self,
+        X: object,
+        y: object,
+        *,
+        input_names: Sequence[str],
+        population_size: int = 50,
+        generations: int = 100,
+        crossover_rate: float = 0.8,
+        mutation_rate: float = 0.15,
+        mutation_sigma: float = 0.1,
+        tournament_size: int = 3,
+        elitism_count: int = 2,
+        loss: Literal["mse", "rmse", "mae"] = "mse",
+        seed: int = 42,
+    ) -> list[float]:
+        """Изменить параметры MF собранной модели с одним выходом через C++ GA.
+
+        X имеет форму (n_samples, n_features), y — (n_samples,).
+        Возвращает историю лучшего значения функции потерь по поколениям.
+        """
+        ...
+
     def plot_mf(
         self,
         variables: str | Sequence[str] | None = None,
