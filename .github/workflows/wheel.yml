@@ -92,6 +92,8 @@ jobs:
         run: |
           $pythonExe = (Get-Command python).Source
           $ucrtBin = Join-Path $env:MSYS2_LOCATION "ucrt64/bin"
+          $env:Path = "$ucrtBin;$env:Path"
+          & "$ucrtBin/gcc.exe" --version
           & "$ucrtBin/cmake.exe" `
             -S fuzzy-logic-library `
             -B fuzzy-logic-library/build_release `
