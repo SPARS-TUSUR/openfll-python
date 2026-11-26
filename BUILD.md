@@ -3,9 +3,9 @@
 Дистрибутив публикуется на PyPI под именем `openfll_python`. После установки
 пользователь импортирует пакет как `openfll`.
 
-## Выпуск 0.3.2
+## Выпуск 0.4.0
 
-В версии 0.3.2 добавлена сборка Linux manylinux wheels для Python 3.13 и 3.14 (с поддержкой Google Colab).
+В версии 0.4.0 добавлен регрессор `SugenoGARegressor` и интеграция нативного C++ генетического алгоритма оптимизации (`fit_ga`, `set_mf_bounds`) с `scikit-learn` (`GridSearchCV`, `RandomizedSearchCV`).
 
 Пакет поддерживает:
 
@@ -27,7 +27,7 @@ Workflow `.github/workflows/wheel.yml` поддерживает три сцен�
    публикуя их.
 2. Ручной запуск с `publish_target=testpypi` — собрать, протестировать и
    отправить wheels в TestPyPI.
-3. Публикация GitHub Release с тегом `v0.3.1` — собрать и протестировать wheels,
+3. Публикация GitHub Release с тегом `v0.4.0` — собрать и протестировать wheels,
    прикрепить их к GitHub Release и отправить в PyPI.
 
 Production-публикация не запускается от обычного push или pull request.
