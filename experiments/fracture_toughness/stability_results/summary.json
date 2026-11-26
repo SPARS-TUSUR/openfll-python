@@ -1,0 +1,152 @@
+{
+  "protocol": {
+    "seeds": [
+      7,
+      19,
+      42,
+      73,
+      101
+    ],
+    "repeats": 3,
+    "outer_folds": 5,
+    "penalty_inner_folds": 3,
+    "meaningful_width_parameters": 3,
+    "width_bounds": "0.8..1.2 * initial sigma",
+    "penalties": "training_variance * mean squared log(sigma/sigma_initial)",
+    "penalty_candidates": [
+      [
+        0,
+        0
+      ],
+      [
+        0.3,
+        0
+      ],
+      [
+        3,
+        0
+      ],
+      [
+        0,
+        0.3
+      ],
+      [
+        0,
+        3
+      ]
+    ],
+    "small_budget": {
+      "population_size": 24,
+      "generations": 40
+    },
+    "large_budget": {
+      "population_size": 48,
+      "generations": 120
+    },
+    "raw35_eligibility": "sensitivity only, nine excluded records need scientific review"
+  },
+  "raw35_penalty_search": "excluded: inner CV extrapolation can return non-finite predictions",
+  "data_sha256": {
+    "article_clean_26.csv": "7a95eee288525a0899282c155c795378eb17d05aa820dd2adc8c5049514f3011",
+    "full_experimental_data.xlsx": "b622104c44abf433db029f1b9920e6d32c1061d14d8e5e48d3731ef6b6c88ea9",
+    "Training Data_predictors.xlsx": "deefd3d376c71985ae6bf8fe4f473536f434f846683c254db428240e80c6f361",
+    "Training Data_response.xlsx": "95a62944bcb1054b4d6f62c5edbc1ea3f8df46ae761099e717b1c42686709c40"
+  },
+  "native": {
+    "path": "C:\\Users\\matve\\.codex\\worktrees\\ga-regularization\\fuzzy-logic-library\\build_regularization\\src\\PyFLL\\_core.cp314-win_amd64.pyd",
+    "sha256": "67bfda7f6823dfa56b467fef049f0d1ff7bc9445c1f0ff92f1407af3dec032fe"
+  },
+  "seconds": 358.8115056999959,
+  "comparisons": [
+    {
+      "dataset": "clean26",
+      "case": "original",
+      "runs": 3,
+      "median_rmse": 0.15033279669741564,
+      "min_rmse": 0.14112950021972323,
+      "max_rmse": 0.17201312294256713,
+      "median_paired_change_percent": 0.0,
+      "better_than_original_fraction": 0.0
+    },
+    {
+      "dataset": "clean26",
+      "case": "wide_ga",
+      "runs": 15,
+      "median_rmse": 0.14329838183105223,
+      "min_rmse": 0.1203896675084639,
+      "max_rmse": 0.18984994031086047,
+      "median_paired_change_percent": -6.030915347787536,
+      "better_than_original_fraction": 0.6
+    },
+    {
+      "dataset": "clean26",
+      "case": "three_widths",
+      "runs": 15,
+      "median_rmse": 0.15164083881625523,
+      "min_rmse": 0.14213124936798688,
+      "max_rmse": 0.17348907441374922,
+      "median_paired_change_percent": 0.8488103481451015,
+      "better_than_original_fraction": 0.0
+    },
+    {
+      "dataset": "clean26",
+      "case": "three_widths_large",
+      "runs": 15,
+      "median_rmse": 0.15164079179423368,
+      "min_rmse": 0.14213365156770513,
+      "max_rmse": 0.1734738253173183,
+      "median_paired_change_percent": 0.8482165331896052,
+      "better_than_original_fraction": 0.0
+    },
+    {
+      "dataset": "clean26",
+      "case": "regularized_widths",
+      "runs": 15,
+      "median_rmse": 0.15126348707591258,
+      "min_rmse": 0.14218221111222507,
+      "max_rmse": 0.17356993454486785,
+      "median_paired_change_percent": 0.7175967955123763,
+      "better_than_original_fraction": 0.0
+    },
+    {
+      "dataset": "raw35_sensitivity",
+      "case": "original",
+      "runs": 1,
+      "median_rmse": 0.18901874534176968,
+      "min_rmse": 0.18901874534176968,
+      "max_rmse": 0.18901874534176968,
+      "median_paired_change_percent": 0.0,
+      "better_than_original_fraction": 0.0
+    },
+    {
+      "dataset": "raw35_sensitivity",
+      "case": "wide_ga",
+      "runs": 5,
+      "median_rmse": 0.18277816139844982,
+      "min_rmse": 0.1798170305278187,
+      "max_rmse": 0.19185551343591806,
+      "median_paired_change_percent": -3.301568811091249,
+      "better_than_original_fraction": 0.8
+    },
+    {
+      "dataset": "raw35_sensitivity",
+      "case": "three_widths",
+      "runs": 5,
+      "median_rmse": 0.1890753814200321,
+      "min_rmse": 0.18907516818069445,
+      "max_rmse": 0.18907562016579882,
+      "median_paired_change_percent": 0.02996320717292278,
+      "better_than_original_fraction": 0.0
+    },
+    {
+      "dataset": "raw35_sensitivity",
+      "case": "three_widths_large",
+      "runs": 5,
+      "median_rmse": 0.1890754008033012,
+      "min_rmse": 0.18907539640447535,
+      "max_rmse": 0.1890754108044978,
+      "median_paired_change_percent": 0.0299734618537828,
+      "better_than_original_fraction": 0.0
+    }
+  ]
+}

@@ -53,6 +53,9 @@ experiments/fracture_toughness/results/surface_predictions.csv
 experiments/fracture_toughness/results/simpful_surface_sample.csv
 experiments/fracture_toughness/results/niihara_reference_predictions.csv
 
+# Trained experiment models can be regenerated from ga_evaluation.py and summary.json.
+experiments/fracture_toughness/ga_results/*_model.json
+
 # C++ extension binaries and MinGW runtime (built by CI)
 *.dll
 *.pyd

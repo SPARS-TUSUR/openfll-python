@@ -259,11 +259,17 @@ class BaseLinearEngine(Generic[_DefuzzerName]):
         elitism_count: int = 2,
         loss: LossType = "mse",
         seed: int = 42,
+        deviation_penalty: float = 0.0,
+        narrow_sigma_penalty: float = 0.0,
     ) -> list[float]:
         """Изменить параметры MF собранной модели с одним выходом через C++ GA.
 
         X имеет форму (n_samples, n_features), y — (n_samples,).
         Возвращает историю лучшего значения функции потерь по поколениям.
+        При ненулевых deviation_penalty / narrow_sigma_penalty история включает
+        штраф за изменение / сужение Gaussian-ширин относительно исходных.
+        Коэффициенты имеют единицы выбранной ошибки. Требуется backend
+        с поддержкой регуляризации GA.
         """
         ...
 
