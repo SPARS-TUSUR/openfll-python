@@ -80,3 +80,73 @@ def test_fracture_search_builds_rules_only_from_current_fit_data(fracture_data, 
     assert not np.intersect1d(train, test).size
     np.testing.assert_array_equal(fitted.training_X_, X[train])
     assert np.isfinite(search.best_score_)
+
+
+def test_restricted_model_changes_only_three_porosity_widths(fracture_data):
+    _, X, y = fracture_data
+    model = FractureGARegressor(width_variables=("P",), population_size=12, generations=8).fit(X, y)
+    initial = {}
+    for variable, terms in zip(INPUT_NAMES, (model.definition_.p_terms, model.definition_.a_terms, model.definition_.c_terms)):
+        for name, center, sigma in terms:
+            initial[(variable, name)] = [center, sigma]
+    for rule in model.definition_.rules:
+        initial[(OUTPUT_NAME, rule.output_term)] = [rule.output_value]
+    free = 0
+    terms = model.engine_.to_dict()["extra"]["linear_api"]["membership_functions"]
+    for term in terms:
+        key = (term["variable"], term["name"])
+        for index, (current, previous) in enumerate(zip(term["parameters"], initial[key])):
+            if term["variable"] == "P" and index == 1:
+                free += 1
+                assert 0.8 * previous <= current <= 1.2 * previous
+            else:
+                assert np.nextafter(previous, -np.inf) <= current <= np.nextafter(previous, np.inf)
+    assert free == 3
+
+
+def test_training_curve_subsets_preserve_strata_and_are_nested(fracture_data):
+    from experiments.fracture_toughness.stability_evaluation import training_subset
+    _, X, _ = fracture_data
+    small = training_subset(X, 0.5, 17)
+    middle = training_subset(X, 0.75, 17)
+    full = training_subset(X, 1.0, 17)
+    assert set(small).issubset(middle)
+    assert set(middle).issubset(full)
+    assert len(full) == len(X)
+    assert len(np.unique(X[small, 0])) == 3
+
+
+def test_restricted_penalty_history_matches_native_objective(fracture_data):
+    import openfll
+    if "deviation_penalty" not in openfll.SugenoEngine.fit_ga.__doc__:
+        pytest.skip("Requires regularized native GA")
+    _, X, y = fracture_data
+    model = FractureGARegressor(
+        width_variables=("P",), deviation_penalty=0.3, narrow_sigma_penalty=0.7,
+        population_size=12, generations=8,
+    ).fit(X, y)
+    original = {name: sigma for name, _, sigma in model.definition_.p_terms}
+    terms = model.engine_.to_dict()["extra"]["linear_api"]["membership_functions"]
+    changes = np.array([np.log(term["parameters"][1] / original[term["name"]])
+                        for term in terms if term["variable"] == "P"])
+    mse = np.mean((model.predict(X) - y) ** 2)
+    expected = mse + np.var(y) * (
+        0.3 * np.mean(changes**2) + 0.7 * np.mean(np.minimum(changes, 0)**2)
+    )
+    assert model.loss_history_[-1] == pytest.approx(expected, abs=1e-12)
+
+
+def test_raw_sensitivity_audit_identifies_the_nonfinite_inner_cv_point(fracture_data):
+    import csv
+    from experiments.fracture_toughness.stability_evaluation import diagnose_inner_cv
+
+    path = Path(__file__).parents[1] / "experiments/fracture_toughness/stability_results/raw_data_audit.csv"
+    with path.open(encoding="utf-8") as stream:
+        rows = list(csv.DictReader(stream))
+    X = np.array([[float(row[name]) for name in INPUT_NAMES] for row in rows])
+    y = np.array([float(row["KIC"]) for row in rows])
+    assert sum(row["status"] == "raw_only_unconfirmed" for row in rows) == 9
+    failures = diagnose_inner_cv(X, y)
+    assert len(failures) == 1
+    assert failures[0]["c"] == pytest.approx(172.37)
+    assert failures[0]["row_index"] == 12

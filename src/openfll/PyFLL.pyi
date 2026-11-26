@@ -358,6 +358,8 @@ class BaseLinearEngine(Generic[_DefuzzerName]):
         elitism_count: int = 2,
         loss: LossType = "mse",
         seed: int = 42,
+        deviation_penalty: float = 0.0,
+        narrow_sigma_penalty: float = 0.0,
     ) -> List[float]:
         """Optimize membership function parameters using a Genetic Algorithm.
 

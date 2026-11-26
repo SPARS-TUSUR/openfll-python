@@ -160,6 +160,8 @@ if TYPE_CHECKING or _BACKEND_IMPORT_ERROR is not None:
             elitism_count: int = 2,
             loss: LossType = "mse",
             seed: int = 42,
+            deviation_penalty: float = 0.0,
+            narrow_sigma_penalty: float = 0.0,
         ) -> list[float]:
             """Оптимизировать параметры функций принадлежности генетическим алгоритмом."""
             _native_unavailable()

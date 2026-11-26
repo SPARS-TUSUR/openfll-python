@@ -49,6 +49,10 @@ class FractureGARegressor(RegressorMixin, BaseEstimator):
         population_size: int = 24,
         generations: int = 40,
         random_state: int = 42,
+        width_variables: tuple[str, ...] | None = None,
+        width_radius: float = 0.2,
+        deviation_penalty: float = 0.0,
+        narrow_sigma_penalty: float = 0.0,
     ) -> None:
         self.optimize = optimize
         self.train_consequents = train_consequents
@@ -57,6 +61,10 @@ class FractureGARegressor(RegressorMixin, BaseEstimator):
         self.population_size = population_size
         self.generations = generations
         self.random_state = random_state
+        self.width_variables = width_variables
+        self.width_radius = width_radius
+        self.deviation_penalty = deviation_penalty
+        self.narrow_sigma_penalty = narrow_sigma_penalty
 
     def fit(self, X: object, y: object) -> FractureGARegressor:
         X, y = check_X_y(X, y, dtype=np.float64, multi_output=False)
@@ -66,6 +74,13 @@ class FractureGARegressor(RegressorMixin, BaseEstimator):
             raise ValueError("center_radius must be finite and positive")
         if np.any(y <= 0):
             raise ValueError("Experimental KIC values must be positive")
+        if self.width_variables is not None:
+            if self.train_consequents:
+                raise ValueError("Restricted-width experiments keep consequents fixed")
+            if not set(self.width_variables).issubset(INPUT_NAMES):
+                raise ValueError("width_variables must contain only P, a, c")
+            if not np.isfinite(self.width_radius) or not 0 < self.width_radius < 1:
+                raise ValueError("width_radius must lie strictly between zero and one")
         records = [Observation(i, 0.0, *row, value) for i, (row, value) in enumerate(zip(X, y))]
         definition = build_model_definition(records)
         engine = build_openfll_engine(definition)
@@ -74,10 +89,17 @@ class FractureGARegressor(RegressorMixin, BaseEstimator):
         if self.optimize:
             for variable, terms in zip(INPUT_NAMES, (definition.p_terms, definition.a_terms, definition.c_terms)):
                 for name, center, sigma in terms:
-                    bounds = [
-                        (center - self.center_radius * sigma, center + self.center_radius * sigma),
-                        (0.5 * sigma, 2.0 * sigma),
-                    ]
+                    if self.width_variables is None:
+                        bounds = [
+                            (center - self.center_radius * sigma, center + self.center_radius * sigma),
+                            (0.5 * sigma, 2.0 * sigma),
+                        ]
+                    else:
+                        center_bounds = (float(np.nextafter(center, -np.inf)), float(np.nextafter(center, np.inf)))
+                        sigma_bounds = (float(np.nextafter(sigma, -np.inf)), float(np.nextafter(sigma, np.inf)))
+                        if variable in self.width_variables:
+                            sigma_bounds = ((1 - self.width_radius) * sigma, (1 + self.width_radius) * sigma)
+                        bounds = [center_bounds, sigma_bounds]
                     engine.set_mf_bounds(variable, name, bounds)
                     bounds_by_term[(variable, name)] = bounds
             for rule in definition.rules:
@@ -89,9 +111,18 @@ class FractureGARegressor(RegressorMixin, BaseEstimator):
                     bounds = [(float(np.nextafter(value, -np.inf)), float(np.nextafter(value, np.inf)))]
                 engine.set_mf_bounds(OUTPUT_NAME, rule.output_term, bounds)
                 bounds_by_term[(OUTPUT_NAME, rule.output_term)] = bounds
+            penalty_options = {}
+            for name in ("deviation_penalty", "narrow_sigma_penalty"):
+                value = getattr(self, name)
+                if not np.isfinite(value) or value < 0:
+                    raise ValueError(f"{name} must be finite and nonnegative")
+                if value:
+                    # Scale dimensionless coefficients by training variance, within each fit.
+                    penalty_options[name] = float(value * np.var(y))
             history = engine.fit_ga(
                 X, y, input_names=INPUT_NAMES, population_size=self.population_size,
                 generations=self.generations, mutation_rate=self.mutation_rate, seed=self.random_state,
+                **penalty_options,
             )
         else:
             history = []
