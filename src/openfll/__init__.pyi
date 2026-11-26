@@ -32,6 +32,12 @@ SNorms = Literal[
     "hamacher_sum",
 ]
 
+LossType = Literal[
+    "mse",
+    "rmse",
+    "mae",
+]
+
 
 def constant(value: float) -> List[float]:
     """Вернуть params для constant membership function: [value]."""
@@ -161,7 +167,10 @@ class BaseLinearEngine(Generic[_DefuzzerName]):
     def model_ref(self) -> ModelView: ...
     def set_defuzzer(self, name: _DefuzzerName) -> None: ...
     def get_defuzzer(self) -> str: ...
+    @overload
     def find_belonging(self, mf_name: str, value: float) -> float: ...
+    @overload
+    def find_belonging(self, var_name: str, mf_name: str, value: float) -> float: ...
     def get_input_var_names(self) -> list[str]: ...
     def get_output_var_names(self) -> list[str]: ...
 
@@ -248,7 +257,7 @@ class BaseLinearEngine(Generic[_DefuzzerName]):
         mutation_sigma: float = 0.1,
         tournament_size: int = 3,
         elitism_count: int = 2,
-        loss: Literal["mse", "rmse", "mae"] = "mse",
+        loss: LossType = "mse",
         seed: int = 42,
     ) -> list[float]:
         """Изменить параметры MF собранной модели с одним выходом через C++ GA.

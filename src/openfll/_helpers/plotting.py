@@ -61,7 +61,7 @@ def _register_membership_function(
     definitions.setdefault(variable_name, []).append(
         _MembershipFunction(
             name=mf_name,
-            mf_type=mf_type,
+            mf_type=str(mf_type).lower(),
             params=tuple(float(value) for value in params),
         )
     )
@@ -204,12 +204,16 @@ def plot_mf(
         metadata = engine.to_dict().get("extra", {}).get("linear_api", {})
         if metadata.get("membership_functions"):
             # GA changes parameters in C++, after Python has registered the initial values.
-            roles = dict.fromkeys(metadata["input_order"], "input")
-            roles.update(dict.fromkeys(metadata["output_order"], "output"))
+            roles = dict.fromkeys(metadata.get("input_order", []), "input")
+            roles.update(dict.fromkeys(metadata.get("output_order", []), "output"))
             definitions_by_variable = {}
             for term in metadata["membership_functions"]:
                 definitions_by_variable.setdefault(term["variable"], []).append(
-                    _MembershipFunction(term["name"], term["type"], tuple(term["parameters"]))
+                    _MembershipFunction(
+                        term["name"],
+                        str(term["type"]).lower(),
+                        tuple(term["parameters"]),
+                    )
                 )
     if not roles:
         raise ValueError(

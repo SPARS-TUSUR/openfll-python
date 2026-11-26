@@ -113,9 +113,15 @@ def test_plot_shows_optimized_consequents(ga_model):
 
 
 @pytest.mark.parametrize("randomized", [False, True])
-def test_ga_regressor_hyperparameter_search(ga_model, randomized):
+def test_ga_regressor_hyperparameter_search(ga_backend, randomized):
     model_selection = pytest.importorskip("sklearn.model_selection")
-    X, y, spec = ga_model
+    X = np.linspace(0.0, 10.0, 32).reshape(-1, 1)
+    y = 2.0 * X[:, 0] + 1.0
+    # Gaussian MFs have global support so holdout edge points never drop to 0 activation (NaN).
+    spec = SugenoModelSpec(
+        inputs={"x": [("low", "gaussian", [0.0, 4.0]), ("high", "gaussian", [10.0, 4.0])]},
+        rules=['IF x IS "low" THEN y IS "low_value"', 'IF x IS "high" THEN y IS "high_value"'],
+    )
     estimator = SugenoGARegressor(spec, generations=6, population_size=12, random_state=12)
     candidates = {"mutation_rate": [0.15, 0.3], "mutation_sigma": [0.1, 0.2]}
     cv = model_selection.KFold(n_splits=3, shuffle=True, random_state=42)
@@ -233,3 +239,129 @@ def test_failed_native_refit_preserves_the_trained_model(ga_model):
     assert estimator.engine_ is engine
     assert estimator.loss_history_ == history
     np.testing.assert_array_equal(estimator.predict(X), predictions)
+
+
+def test_ga_offset_target_converges_tightly(ga_model):
+    X, _, spec = ga_model
+    y_offset = 1000.0 + 2.0 * X[:, 0]
+    reg = SugenoGARegressor(spec, population_size=40, generations=60, random_state=42).fit(X, y_offset)
+    rmse = float(np.sqrt(np.mean((reg.predict(X) - y_offset) ** 2)))
+    assert reg.loss_history_[0] < 100.0
+    assert rmse < 0.5
+
+
+def test_ga_regressor_parameter_validation(ga_model):
+    X, y, spec = ga_model
+    bad_configs = [
+        {"random_state": True},
+        {"random_state": -1},
+        {"crossover_rate": True},
+        {"mutation_rate": True},
+        {"mutation_sigma": True},
+        {"population_size": True},
+        {"population_size": -1},
+        {"population_size": 1},
+        {"generations": True},
+        {"generations": 0},
+        {"tournament_size": 0},
+        {"elitism_count": -1},
+        {"elitism_count": 10, "population_size": 10},
+        {"defuzzer": None},
+        {"defuzzer": "bad"},
+        {"loss": "unknown"},
+        {"crossover_rate": 1.5},
+        {"mutation_rate": -0.1},
+        {"mutation_sigma": 0.0},
+        {"mf_bounds": {"xy": [(0.0, 1.0)]}},
+    ]
+    for kwargs in bad_configs:
+        with pytest.raises(ValueError):
+            SugenoGARegressor(spec, **kwargs).fit(X, y)
+
+    r_rs1 = SugenoGARegressor(spec, population_size=12, generations=5, random_state=np.random.RandomState(42)).fit(X, y)
+    r_rs2 = SugenoGARegressor(spec, population_size=12, generations=5, random_state=np.random.RandomState(42)).fit(X, y)
+    assert r_rs1.loss_history_ == r_rs2.loss_history_
+
+    r_gen1 = SugenoGARegressor(spec, population_size=12, generations=5, random_state=np.random.default_rng(42)).fit(X, y)
+    r_gen2 = SugenoGARegressor(spec, population_size=12, generations=5, random_state=np.random.default_rng(42)).fit(X, y)
+    assert r_gen1.loss_history_ == r_gen2.loss_history_
+
+
+def test_ga_regressor_wtsum_and_pickle(ga_model):
+    X, y, spec = ga_model
+    reg = SugenoGARegressor(spec, defuzzer="wtsum", population_size=20, generations=15, random_state=42).fit(X, y)
+    preds = reg.predict(X)
+    restored = pickle.loads(pickle.dumps(reg))
+    assert restored.engine_.get_defuzzer() == "wtsum"
+    np.testing.assert_allclose(restored.predict(X), preds, atol=1e-12, rtol=0)
+
+
+def test_ga_regressor_parallel_grid_search(ga_backend):
+    joblib = pytest.importorskip("joblib")
+    model_selection = pytest.importorskip("sklearn.model_selection")
+    X = np.linspace(0.0, 10.0, 32).reshape(-1, 1)
+    y = 2.0 * X[:, 0] + 1.0
+    spec = SugenoModelSpec(
+        inputs={"x": [("low", "gaussian", [0.0, 4.0]), ("high", "gaussian", [10.0, 4.0])]},
+        rules=['IF x IS "low" THEN y IS "low_value"', 'IF x IS "high" THEN y IS "high_value"'],
+    )
+    cv = model_selection.KFold(n_splits=3, shuffle=True, random_state=42)
+    grid = {"mutation_rate": [0.1, 0.3]}
+
+    gs_loky = model_selection.GridSearchCV(
+        SugenoGARegressor(spec, population_size=16, generations=10, random_state=42),
+        grid, cv=cv, n_jobs=2, error_score="raise",
+    ).fit(X, y)
+
+    gs_thread = model_selection.GridSearchCV(
+        SugenoGARegressor(spec, population_size=16, generations=10, random_state=42),
+        grid, cv=cv, n_jobs=2, error_score="raise",
+    )
+    with joblib.parallel_backend("threading", n_jobs=2):
+        gs_thread.fit(X, y)
+
+    assert np.isfinite(gs_loky.best_score_)
+    assert gs_thread.best_score_ == pytest.approx(gs_loky.best_score_)
+    np.testing.assert_allclose(gs_thread.predict(X), gs_loky.predict(X), atol=1e-12, rtol=0)
+
+
+def test_public_mamdani_native_fit_ga(ga_backend):
+    engine = openfll.MamdaniEngine()
+    engine.add_input_var("x")
+    engine.add_output_var("y")
+    engine.add_membership_func("x", "low", "triangular", [-2.0, 0.0, 6.0])
+    engine.add_membership_func("x", "high", "triangular", [4.0, 10.0, 12.0])
+    engine.add_membership_func("y", "y_low", "triangular", [0.0, 2.0, 4.0])
+    engine.add_membership_func("y", "y_high", "triangular", [6.0, 8.0, 10.0])
+    engine.set_integrator(0.0, 10.0, 0.1)
+    engine.add_rule('IF x IS "low" THEN y IS "y_low"')
+    engine.add_rule('IF x IS "high" THEN y IS "y_high"')
+    engine.build()
+
+    X = np.array([[0.0], [5.0], [10.0]], dtype=np.float64)
+    y = np.array([1.5, 5.0, 8.5], dtype=np.float64)
+    history = engine.fit_ga(X, y, input_names=["x"], population_size=12, generations=10, seed=42)
+    assert len(history) == 10
+    assert np.all(np.diff(history) <= 0)
+    assert history[-1] < history[0]
+
+
+def test_plot_mf_handles_uppercase_mf_type_after_ga(ga_backend):
+    matplotlib = pytest.importorskip("matplotlib")
+    matplotlib.use("Agg")
+    from matplotlib import pyplot as plt
+
+    engine = openfll.SugenoEngine()
+    engine.add_input_var("x")
+    engine.add_output_var("y")
+    engine.add_membership_func("x", "g", "Gaussian", [0.0, 2.0])
+    engine.add_membership_func("y", "c", "Constant", [0.0])
+    engine.add_rule('IF x IS "g" THEN y IS "c"')
+    engine.build()
+    engine.fit_ga(np.array([[0.0], [2.0]]), np.array([3.0, 3.0]), input_names=["x"], population_size=8, generations=5, seed=42)
+    plots = engine.plot_mf(show=False)
+    try:
+        assert set(plots) == {"x", "y"}
+    finally:
+        for plot in plots.values():
+            plt.close(plot.figure)

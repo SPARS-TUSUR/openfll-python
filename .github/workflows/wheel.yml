@@ -149,6 +149,8 @@ jobs:
           $buildInfo = Get-Content -LiteralPath $buildInfoPath -Raw | ConvertFrom-Json
           $buildInfo.upstream_branch = "python/pybind"
           $buildInfo.upstream_commit = git -C fuzzy-logic-library rev-parse HEAD
+          $buildInfo.development_branch = "python/pybind"
+          $buildInfo.PSObject.Properties.Remove("upstream_base_commit")
           $buildInfo.python = python -c "import platform; print(platform.python_version())"
           $buildInfo.soabi = $soabi
           $buildInfo | ConvertTo-Json | Set-Content -LiteralPath $buildInfoPath -Encoding utf8
@@ -305,6 +307,9 @@ jobs:
           data = json.load(open(p))
           data['upstream_branch'] = 'python/pybind'
           data['upstream_commit'] = subprocess.check_output(['git', '-C', 'fuzzy-logic-library', 'rev-parse', 'HEAD'], text=True).strip()
+          data['development_branch'] = 'python/pybind'
+          data.pop('upstream_base_commit', None)
+          data['compiler'] = 'GCC ' + subprocess.check_output(['g++', '-dumpfullversion'], text=True).strip()
           data['python'] = platform.python_version()
           data['soabi'] = sysconfig.get_config_var('SOABI')
           json.dump(data, open(p, 'w'), indent=2)

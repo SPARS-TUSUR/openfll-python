@@ -561,10 +561,19 @@ class SugenoGARegressor(_BaseSugenoRegressor):
     """Обучает входные функции принадлежности и константы заключений через C++ GA.
 
     Каждый fit собирает новый движок по model_spec и сохраняет его в engine_.
-    Константы заключений инициализируются нулями. mf_bounds при необходимости
-    задаёт диапазоны параметров по ключу (имя переменной, имя MF). Остальные
-    диапазоны движок вычисляет из обучающей выборки.
-    loss_history_ содержит историю потерь, возвращённую нативным fit_ga.
+    Константы заключений инициализируются средним значением целевой переменной
+    ``mean(y)``, чтобы авто-границы не растягивались к нулю на смещённых данных.
+    ``mf_bounds`` при необходимости задаёт диапазоны параметров по ключу
+    ``(имя переменной, имя MF)``. Остальные диапазоны движок вычисляет из
+    обучающей выборки. ``loss_history_`` содержит историю потерь, возвращённую
+    нативным ``fit_ga``.
+
+    Примечание:
+        При кросс-валидации с компактными функциями принадлежности
+        (``triangular``, ``trapezoidal``) рекомендуется задавать внешние границы
+        через ``mf_bounds`` либо использовать ``gaussian`` MF, чтобы смещение
+        опорных точек на train-фолде не приводило к нулевой суммарной активации
+        (``NaN`` в режиме ``wtaver``) на крайних точках test-фолда.
     """
 
     def __init__(
@@ -583,7 +592,7 @@ class SugenoGARegressor(_BaseSugenoRegressor):
         tournament_size: int = 3,
         elitism_count: int = 2,
         loss: Literal["mse", "rmse", "mae"] = "mse",
-        random_state: int | None = 42,
+        random_state: int | np.random.RandomState | np.random.Generator | None = 42,
     ) -> None:
         self.model_spec = model_spec
         self.default_t_norm = default_t_norm
@@ -600,13 +609,103 @@ class SugenoGARegressor(_BaseSugenoRegressor):
         self.loss = loss
         self.random_state = random_state
 
+    @staticmethod
+    def _validate_int(value: Any, name: str) -> int:
+        if isinstance(value, bool):
+            raise ValueError(f"{name} must be an integer, not bool.")
+        return index(value)
+
+    @staticmethod
+    def _validate_float(value: Any, name: str) -> float:
+        if isinstance(value, bool):
+            raise ValueError(f"{name} must be a finite real number, not bool.")
+        fval = float(value)
+        if not np.isfinite(fval):
+            raise ValueError("GA rates and mutation_sigma must be finite.")
+        return fval
+
+    def _validate_ga_params(self) -> tuple[int, int, float, float, float, int, int, int]:
+        if not isinstance(self.defuzzer, str) or self.defuzzer not in ("wtaver", "wtsum"):
+            raise ValueError(
+                f"Unknown defuzzer: {self.defuzzer!r}. Supported defuzzers are 'wtaver' and 'wtsum'."
+            )
+        if not isinstance(self.loss, str) or self.loss not in ("mse", "rmse", "mae"):
+            raise ValueError(
+                f"Unknown loss: {self.loss!r}. Supported losses are 'mse', 'rmse', and 'mae'."
+            )
+
+        pop_size = self._validate_int(self.population_size, "population_size")
+        if pop_size < 2:
+            raise ValueError(f"population_size must be at least 2, got {pop_size}.")
+
+        gens = self._validate_int(self.generations, "generations")
+        if gens < 1:
+            raise ValueError(f"generations must be at least 1, got {gens}.")
+
+        tourn_size = self._validate_int(self.tournament_size, "tournament_size")
+        if tourn_size < 1:
+            raise ValueError(f"tournament_size must be at least 1, got {tourn_size}.")
+
+        elitism = self._validate_int(self.elitism_count, "elitism_count")
+        if not (0 <= elitism < pop_size):
+            raise ValueError(
+                f"elitism_count must satisfy 0 <= elitism_count < population_size ({pop_size}), got {elitism}."
+            )
+
+        crossover = self._validate_float(self.crossover_rate, "crossover_rate")
+        if not (0.0 <= crossover <= 1.0):
+            raise ValueError(f"crossover_rate must be in [0, 1], got {crossover}.")
+
+        mut_rate = self._validate_float(self.mutation_rate, "mutation_rate")
+        if not (0.0 <= mut_rate <= 1.0):
+            raise ValueError(f"mutation_rate must be in [0, 1], got {mut_rate}.")
+
+        mut_sigma = self._validate_float(self.mutation_sigma, "mutation_sigma")
+        if mut_sigma <= 0.0:
+            raise ValueError(f"mutation_sigma must be positive, got {mut_sigma}.")
+
+        if self.mf_bounds is not None:
+            if not isinstance(self.mf_bounds, Mapping):
+                raise TypeError(f"mf_bounds must be a Mapping or None, got {type(self.mf_bounds).__name__}.")
+            for key in self.mf_bounds:
+                if not (isinstance(key, tuple) and len(key) == 2 and all(isinstance(p, str) for p in key)):
+                    raise ValueError(
+                        f"mf_bounds keys must be (variable_name, mf_name) 2-tuples of strings, got {key!r}."
+                    )
+
+        if self.random_state is None:
+            seed = int(np.random.SeedSequence().generate_state(1, dtype=np.uint64)[0])
+        elif isinstance(self.random_state, bool):
+            raise ValueError("random_state must be a nonnegative 64-bit integer, RandomState, Generator, or None.")
+        elif isinstance(self.random_state, np.random.RandomState):
+            seed = int(self.random_state.randint(0, np.iinfo(np.int64).max, dtype=np.int64))
+        elif isinstance(self.random_state, np.random.Generator):
+            seed = int(self.random_state.integers(0, 2**64, dtype=np.uint64))
+        else:
+            seed = index(self.random_state)
+            if not 0 <= seed < 2**64:
+                raise ValueError("random_state must be a nonnegative 64-bit integer or None.")
+
+        return pop_size, gens, crossover, mut_rate, mut_sigma, tourn_size, elitism, seed
+
     def fit(self, X: Any, y: Any) -> SugenoGARegressor:
         """Обучить новую Sugeno-модель и вернуть self."""
         spec = self._normalize_spec()
         X_arr, y_arr, input_names, feature_names = self._validate_fit_data(spec, X, y)
+        (
+            pop_size,
+            gens,
+            crossover,
+            mut_rate,
+            mut_sigma,
+            tourn_size,
+            elitism,
+            seed,
+        ) = self._validate_ga_params()
         consequents = self._resolve_consequents(spec)
+        init_consequent = float(np.mean(y_arr)) if len(y_arr) else 0.0
         engine = self._build_engine(
-            spec, dict.fromkeys(consequents, 0.0), consequents, defuzzer=self.defuzzer
+            spec, dict.fromkeys(consequents, init_consequent), consequents, defuzzer=self.defuzzer
         )
         if not hasattr(engine, "fit_ga"):
             raise RuntimeError(
@@ -615,26 +714,17 @@ class SugenoGARegressor(_BaseSugenoRegressor):
             )
         for (variable, term), bounds in (self.mf_bounds or {}).items():
             engine.set_mf_bounds(variable, term, bounds)
-        if not np.isfinite([self.crossover_rate, self.mutation_rate, self.mutation_sigma]).all():
-            raise ValueError("GA rates and mutation_sigma must be finite.")
-        seed = (
-            int(np.random.SeedSequence().generate_state(1, dtype=np.uint64)[0])
-            if self.random_state is None
-            else index(self.random_state)
-        )
-        if not 0 <= seed < 2**64:
-            raise ValueError("random_state must be a nonnegative 64-bit integer or None.")
 
         self.loss_history_ = engine.fit_ga(
             X_arr, y_arr,
             input_names=input_names,
-            population_size=self.population_size,
-            generations=self.generations,
-            crossover_rate=self.crossover_rate,
-            mutation_rate=self.mutation_rate,
-            mutation_sigma=self.mutation_sigma,
-            tournament_size=self.tournament_size,
-            elitism_count=self.elitism_count,
+            population_size=pop_size,
+            generations=gens,
+            crossover_rate=crossover,
+            mutation_rate=mut_rate,
+            mutation_sigma=mut_sigma,
+            tournament_size=tourn_size,
+            elitism_count=elitism,
             loss=self.loss,
             seed=seed,
         )
