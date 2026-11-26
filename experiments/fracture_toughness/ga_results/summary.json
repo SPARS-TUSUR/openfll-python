@@ -1,0 +1,1980 @@
+{
+  "environment": {
+    "python": "3.14.7",
+    "platform": "Windows-11-10.0.26300-SP0",
+    "numpy": "2.5.4",
+    "sklearn": "1.9.1",
+    "native_module": "C:\\Users\\matve\\.codex\\worktrees\\ga-sklearn\\openfll-python\\build\\ga-runtime\\PyFLL\\_core.cp314-win_amd64.pyd",
+    "native_sha256": "443afa214f01935a7e99b75e0590d6263c14bea21d11948bcf92e097b08bb9bd",
+    "backend_build": {
+      "upstream_repository": "SPARS-TUSUR/fuzzy-logic-library",
+      "upstream_branch": "python/pybind",
+      "upstream_commit": "2151216e7e768380297f54fbcfa3fb0e56cf9e1b",
+      "upstream_base_commit": "4b2bfe286d131065092e2a5932b3bc0b777d0b0f",
+      "development_branch": "python-serialization",
+      "python": "3.14.7",
+      "soabi": "cp314-win_amd64",
+      "compiler": "GCC UCRT 16.2.0"
+    }
+  },
+  "dataset": {
+    "n": 26,
+    "sha256": "7a95eee288525a0899282c155c795378eb17d05aa820dd2adc8c5049514f3011",
+    "holdout_train_ids": [
+      1,
+      2,
+      3,
+      4,
+      6,
+      7,
+      8,
+      9,
+      12,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      24,
+      25,
+      26
+    ],
+    "holdout_test_ids": [
+      5,
+      10,
+      11,
+      13,
+      22,
+      23
+    ],
+    "theoretical_n": 30000,
+    "theory_files": {
+      "Training Data_predictors.xlsx": "deefd3d376c71985ae6bf8fe4f473536f434f846683c254db428240e80c6f361",
+      "Training Data_response.xlsx": "95a62944bcb1054b4d6f62c5edbc1ea3f8df46ae761099e717b1c42686709c40"
+    }
+  },
+  "protocol": {
+    "seeds": [
+      7,
+      19,
+      42
+    ],
+    "outer_folds": 5,
+    "inner_folds": 3,
+    "candidates_per_search": 4,
+    "population_size": 24,
+    "generations": 40,
+    "score": "RMSE",
+    "grid": {
+      "center_radius": [
+        0.25,
+        0.75
+      ],
+      "mutation_rate": [
+        0.1,
+        0.3
+      ]
+    },
+    "random": {
+      "center_radius": [
+        0.25,
+        0.375,
+        0.5,
+        0.625,
+        0.75
+      ],
+      "mutation_rate": [
+        0.1,
+        0.15,
+        0.2,
+        0.25,
+        0.3
+      ]
+    },
+    "sigma_bounds": "[0.5 * initial_sigma, 2 * initial_sigma]",
+    "center_bounds": "initial_center +/- center_radius * initial_sigma",
+    "joint_output_bounds": "[0.5 * training_min_KIC, 1.5 * training_max_KIC]",
+    "restricted_output_bounds": "adjacent float64 values, at most one ULP change",
+    "theory_used_for_selection": false
+  },
+  "baseline_numpy_parity_max_abs": 1.887379141862766e-15,
+  "metrics": [
+    {
+      "protocol": "holdout",
+      "method": "baseline",
+      "mode": "original",
+      "seed": 42,
+      "seconds": 0.0,
+      "n": 6,
+      "finite": 6,
+      "nan_or_inf": 0,
+      "mse": 0.02511869438978306,
+      "rmse": 0.15848878316708429,
+      "mae": 0.13730762324098988,
+      "max_abs_error": 0.24112282783575756,
+      "r2": 0.3955276891349293
+    },
+    {
+      "protocol": "nested_cv",
+      "method": "baseline",
+      "mode": "original",
+      "seed": 42,
+      "seconds": 0.0,
+      "n": 26,
+      "finite": 26,
+      "nan_or_inf": 0,
+      "mse": 0.019917535832268858,
+      "rmse": 0.14112950021972323,
+      "mae": 0.11324382524884659,
+      "max_abs_error": 0.3763621495607279,
+      "r2": 0.6744443093000433
+    },
+    {
+      "protocol": "full_train",
+      "method": "baseline",
+      "mode": "original",
+      "seed": 42,
+      "seconds": 0.0,
+      "n": 26,
+      "finite": 26,
+      "nan_or_inf": 0,
+      "mse": 0.0034064026864190082,
+      "rmse": 0.05836439570850544,
+      "mae": 0.03600923756527098,
+      "max_abs_error": 0.17775028797554226,
+      "r2": 0.9443217379540166
+    },
+    {
+      "protocol": "external_theory",
+      "method": "baseline",
+      "mode": "original",
+      "seed": 42,
+      "seconds": 0.0,
+      "n": 30000,
+      "finite": 30000,
+      "nan_or_inf": 0,
+      "mse": 0.05846069936946215,
+      "rmse": 0.2417864747446849,
+      "mae": 0.18718455875048456,
+      "max_abs_error": 0.8939996869474323,
+      "r2": 0.5094886019108119
+    },
+    {
+      "protocol": "nested_cv",
+      "method": "grid",
+      "mode": "consequents_one_ulp",
+      "seed": 7,
+      "seconds": 7.018207099987194,
+      "n": 26,
+      "finite": 26,
+      "nan_or_inf": 0,
+      "mse": 0.035310174267303845,
+      "rmse": 0.1879100164102591,
+      "mae": 0.13192749242808077,
+      "max_abs_error": 0.6583014741083655,
+      "r2": 0.42284887703307494
+    },
+    {
+      "protocol": "holdout",
+      "method": "grid",
+      "mode": "consequents_one_ulp",
+      "seed": 7,
+      "seconds": 1.3960463000112213,
+      "n": 6,
+      "finite": 6,
+      "nan_or_inf": 0,
+      "mse": 0.08588065629306085,
+      "rmse": 0.2930540159988613,
+      "mae": 0.20489443791374373,
+      "max_abs_error": 0.6597901384855134,
+      "r2": -1.0666869847021423
+    },
+    {
+      "protocol": "external_theory",
+      "method": "grid",
+      "mode": "consequents_one_ulp",
+      "seed": 7,
+      "seconds": 2.1392756999994162,
+      "n": 30000,
+      "finite": 30000,
+      "nan_or_inf": 0,
+      "mse": 0.06971964274002686,
+      "rmse": 0.2640447741198959,
+      "mae": 0.20306055741774767,
+      "max_abs_error": 0.9206168472116685,
+      "r2": 0.4150210345832215
+    },
+    {
+      "protocol": "full_train",
+      "method": "grid",
+      "mode": "consequents_one_ulp",
+      "seed": 7,
+      "seconds": 0.0,
+      "n": 26,
+      "finite": 26,
+      "nan_or_inf": 0,
+      "mse": 0.0003497027584218806,
+      "rmse": 0.018700341131163374,
+      "mae": 0.014305571132529567,
+      "max_abs_error": 0.03566691618157991,
+      "r2": 0.9942840457767237
+    },
+    {
+      "protocol": "nested_cv",
+      "method": "grid",
+      "mode": "joint",
+      "seed": 7,
+      "seconds": 7.087494100007461,
+      "n": 26,
+      "finite": 26,
+      "nan_or_inf": 0,
+      "mse": 0.023656155526212325,
+      "rmse": 0.15380557703221404,
+      "mae": 0.12184772742249737,
+      "max_abs_error": 0.4477263537276075,
+      "r2": 0.6133359007611554
+    },
+    {
+      "protocol": "holdout",
+      "method": "grid",
+      "mode": "joint",
+      "seed": 7,
+      "seconds": 1.2979964000114705,
+      "n": 6,
+      "finite": 6,
+      "nan_or_inf": 0,
+      "mse": 0.030997244622611053,
+      "rmse": 0.17606034369673101,
+      "mae": 0.13478222807185375,
+      "max_abs_error": 0.361855157728765,
+      "r2": 0.25406250035428646
+    },
+    {
+      "protocol": "external_theory",
+      "method": "grid",
+      "mode": "joint",
+      "seed": 7,
+      "seconds": 2.102106599981198,
+      "n": 30000,
+      "finite": 30000,
+      "nan_or_inf": 0,
+      "mse": 0.06208733362380638,
+      "rmse": 0.2491733003830996,
+      "mae": 0.1940428764084511,
+      "max_abs_error": 0.893623762684389,
+      "r2": 0.47905951950770664
+    },
+    {
+      "protocol": "full_train",
+      "method": "grid",
+      "mode": "joint",
+      "seed": 7,
+      "seconds": 0.0,
+      "n": 26,
+      "finite": 26,
+      "nan_or_inf": 0,
+      "mse": 0.0028781098306436595,
+      "rmse": 0.05364801795633889,
+      "mae": 0.03541185707712235,
+      "max_abs_error": 0.1811476968223743,
+      "r2": 0.9529567793066298
+    },
+    {
+      "protocol": "nested_cv",
+      "method": "random",
+      "mode": "consequents_one_ulp",
+      "seed": 7,
+      "seconds": 7.050549100007629,
+      "n": 26,
+      "finite": 26,
+      "nan_or_inf": 0,
+      "mse": 0.034557196192516564,
+      "rmse": 0.18589565942355019,
+      "mae": 0.13146132390194779,
+      "max_abs_error": 0.6622499739927068,
+      "r2": 0.435156438534842
+    },
+    {
+      "protocol": "holdout",
+      "method": "random",
+      "mode": "consequents_one_ulp",
+      "seed": 7,
+      "seconds": 1.304405200004112,
+      "n": 6,
+      "finite": 6,
+      "nan_or_inf": 0,
+      "mse": 0.013284623643424516,
+      "rmse": 0.1152589417070299,
+      "mae": 0.10367851413196338,
+      "max_abs_error": 0.16558161666092164,
+      "r2": 0.6803103287096075
+    },
+    {
+      "protocol": "external_theory",
+      "method": "random",
+      "mode": "consequents_one_ulp",
+      "seed": 7,
+      "seconds": 2.050773599999957,
+      "n": 30000,
+      "finite": 30000,
+      "nan_or_inf": 0,
+      "mse": 0.06737773722233845,
+      "rmse": 0.25957221966600824,
+      "mae": 0.20149560573397401,
+      "max_abs_error": 0.89404286435171,
+      "r2": 0.43467066864617265
+    },
+    {
+      "protocol": "full_train",
+      "method": "random",
+      "mode": "consequents_one_ulp",
+      "seed": 7,
+      "seconds": 0.0,
+      "n": 26,
+      "finite": 26,
+      "nan_or_inf": 0,
+      "mse": 0.0006441439594369186,
+      "rmse": 0.025379991320662793,
+      "mae": 0.01877800087455131,
+      "max_abs_error": 0.0684397183495924,
+      "r2": 0.9894713516074141
+    },
+    {
+      "protocol": "nested_cv",
+      "method": "random",
+      "mode": "joint",
+      "seed": 7,
+      "seconds": 6.864415899995947,
+      "n": 26,
+      "finite": 26,
+      "nan_or_inf": 0,
+      "mse": 0.03615889072154,
+      "rmse": 0.1901549124307337,
+      "mae": 0.13703916239582445,
+      "max_abs_error": 0.6705360316003552,
+      "r2": 0.40897645457107434
+    },
+    {
+      "protocol": "holdout",
+      "method": "random",
+      "mode": "joint",
+      "seed": 7,
+      "seconds": 1.3005048999912106,
+      "n": 6,
+      "finite": 6,
+      "nan_or_inf": 0,
+      "mse": 0.02238465719882783,
+      "rmse": 0.1496150299897301,
+      "mae": 0.13542699185484308,
+      "max_abs_error": 0.22417349881886128,
+      "r2": 0.4613213069544909
+    },
+    {
+      "protocol": "external_theory",
+      "method": "random",
+      "mode": "joint",
+      "seed": 7,
+      "seconds": 2.086884899996221,
+      "n": 30000,
+      "finite": 30000,
+      "nan_or_inf": 0,
+      "mse": 0.054949897954457975,
+      "rmse": 0.23441394573373397,
+      "mae": 0.1823341172227397,
+      "max_abs_error": 0.8932714155138481,
+      "r2": 0.5389457950176524
+    },
+    {
+      "protocol": "full_train",
+      "method": "random",
+      "mode": "joint",
+      "seed": 7,
+      "seconds": 0.0,
+      "n": 26,
+      "finite": 26,
+      "nan_or_inf": 0,
+      "mse": 0.00293081187105748,
+      "rmse": 0.05413697323509581,
+      "mae": 0.03379245455534492,
+      "max_abs_error": 0.1718075351029329,
+      "r2": 0.9520953550163609
+    },
+    {
+      "protocol": "nested_cv",
+      "method": "grid",
+      "mode": "consequents_one_ulp",
+      "seed": 19,
+      "seconds": 6.968424600025173,
+      "n": 26,
+      "finite": 26,
+      "nan_or_inf": 0,
+      "mse": 0.0235204705073315,
+      "rmse": 0.15336385006686387,
+      "mae": 0.1146271315976939,
+      "max_abs_error": 0.4656367868101473,
+      "r2": 0.6155536966979307
+    },
+    {
+      "protocol": "holdout",
+      "method": "grid",
+      "mode": "consequents_one_ulp",
+      "seed": 19,
+      "seconds": 1.3041949000034947,
+      "n": 6,
+      "finite": 6,
+      "nan_or_inf": 0,
+      "mse": 0.015197700410102474,
+      "rmse": 0.12327895363809054,
+      "mae": 0.10718939558907514,
+      "max_abs_error": 0.19445393038146785,
+      "r2": 0.6342728270755073
+    },
+    {
+      "protocol": "external_theory",
+      "method": "grid",
+      "mode": "consequents_one_ulp",
+      "seed": 19,
+      "seconds": 2.1317101000167895,
+      "n": 30000,
+      "finite": 30000,
+      "nan_or_inf": 0,
+      "mse": 0.0694771432861778,
+      "rmse": 0.2635851727358309,
+      "mae": 0.20239353949899502,
+      "max_abs_error": 0.9193906573625097,
+      "r2": 0.4170557133918281
+    },
+    {
+      "protocol": "full_train",
+      "method": "grid",
+      "mode": "consequents_one_ulp",
+      "seed": 19,
+      "seconds": 0.0,
+      "n": 26,
+      "finite": 26,
+      "nan_or_inf": 0,
+      "mse": 0.000557731341905589,
+      "rmse": 0.023616336335375753,
+      "mae": 0.01587725277316796,
+      "max_abs_error": 0.06956420636607796,
+      "r2": 0.9908837813187253
+    },
+    {
+      "protocol": "nested_cv",
+      "method": "grid",
+      "mode": "joint",
+      "seed": 19,
+      "seconds": 6.866084999986924,
+      "n": 26,
+      "finite": 26,
+      "nan_or_inf": 0,
+      "mse": 0.012993088289289642,
+      "rmse": 0.11398722862360346,
+      "mae": 0.09768669909083277,
+      "max_abs_error": 0.24158207685347455,
+      "r2": 0.7876256446597109
+    },
+    {
+      "protocol": "holdout",
+      "method": "grid",
+      "mode": "joint",
+      "seed": 19,
+      "seconds": 1.2360895000165328,
+      "n": 6,
+      "finite": 6,
+      "nan_or_inf": 0,
+      "mse": 0.021736189120436917,
+      "rmse": 0.147431981335248,
+      "mae": 0.13568632757229174,
+      "max_abs_error": 0.21869880242532247,
+      "r2": 0.47692645711813253
+    },
+    {
+      "protocol": "external_theory",
+      "method": "grid",
+      "mode": "joint",
+      "seed": 19,
+      "seconds": 2.048489699984202,
+      "n": 30000,
+      "finite": 30000,
+      "nan_or_inf": 0,
+      "mse": 0.05270469665398896,
+      "rmse": 0.2295750349101334,
+      "mae": 0.17796573112854142,
+      "max_abs_error": 0.8341047029107609,
+      "r2": 0.5577840374739169
+    },
+    {
+      "protocol": "full_train",
+      "method": "grid",
+      "mode": "joint",
+      "seed": 19,
+      "seconds": 0.0,
+      "n": 26,
+      "finite": 26,
+      "nan_or_inf": 0,
+      "mse": 0.0011661333660268267,
+      "rmse": 0.03414869493885274,
+      "mae": 0.023823148785906054,
+      "max_abs_error": 0.11216900876075553,
+      "r2": 0.9809393412607766
+    },
+    {
+      "protocol": "nested_cv",
+      "method": "random",
+      "mode": "consequents_one_ulp",
+      "seed": 19,
+      "seconds": 3.3563027999771293,
+      "n": 26,
+      "finite": 26,
+      "nan_or_inf": 0,
+      "mse": 0.03562519683552075,
+      "rmse": 0.18874638231108098,
+      "mae": 0.12948289289364429,
+      "max_abs_error": 0.6622472198569422,
+      "r2": 0.41769977673042746
+    },
+    {
+      "protocol": "holdout",
+      "method": "random",
+      "mode": "consequents_one_ulp",
+      "seed": 19,
+      "seconds": 0.5542688999848906,
+      "n": 6,
+      "finite": 6,
+      "nan_or_inf": 0,
+      "mse": 0.02167469107470409,
+      "rmse": 0.1472232694743059,
+      "mae": 0.12268467820582102,
+      "max_abs_error": 0.28157684795241145,
+      "r2": 0.4784063853835494
+    },
+    {
+      "protocol": "external_theory",
+      "method": "random",
+      "mode": "consequents_one_ulp",
+      "seed": 19,
+      "seconds": 0.840827599982731,
+      "n": 30000,
+      "finite": 30000,
+      "nan_or_inf": 0,
+      "mse": 0.06487389750931795,
+      "rmse": 0.25470354828568437,
+      "mae": 0.1986566024961987,
+      "max_abs_error": 0.9255624101860992,
+      "r2": 0.4556790029882428
+    },
+    {
+      "protocol": "full_train",
+      "method": "random",
+      "mode": "consequents_one_ulp",
+      "seed": 19,
+      "seconds": 0.0,
+      "n": 26,
+      "finite": 26,
+      "nan_or_inf": 0,
+      "mse": 0.0002697652580450478,
+      "rmse": 0.016424532201711188,
+      "mae": 0.012101744644837193,
+      "max_abs_error": 0.037411183512656376,
+      "r2": 0.9955906385383566
+    },
+    {
+      "protocol": "nested_cv",
+      "method": "random",
+      "mode": "joint",
+      "seed": 19,
+      "seconds": 5.948692899983143,
+      "n": 26,
+      "finite": 26,
+      "nan_or_inf": 0,
+      "mse": 0.024772665497057256,
+      "rmse": 0.15739334641927294,
+      "mae": 0.11877074093787622,
+      "max_abs_error": 0.533796315376772,
+      "r2": 0.5950863453044548
+    },
+    {
+      "protocol": "holdout",
+      "method": "random",
+      "mode": "joint",
+      "seed": 19,
+      "seconds": 1.3372820000222418,
+      "n": 6,
+      "finite": 6,
+      "nan_or_inf": 0,
+      "mse": 0.02536489490302758,
+      "rmse": 0.15926360194039182,
+      "mae": 0.14657402286978935,
+      "max_abs_error": 0.2229216943118113,
+      "r2": 0.38960296267949646
+    },
+    {
+      "protocol": "external_theory",
+      "method": "random",
+      "mode": "joint",
+      "seed": 19,
+      "seconds": 2.19598180000321,
+      "n": 30000,
+      "finite": 30000,
+      "nan_or_inf": 0,
+      "mse": 0.05846069936946215,
+      "rmse": 0.2417864747446849,
+      "mae": 0.18718455875048456,
+      "max_abs_error": 0.8939996869474323,
+      "r2": 0.5094886019108119
+    },
+    {
+      "protocol": "full_train",
+      "method": "random",
+      "mode": "joint",
+      "seed": 19,
+      "seconds": 0.0,
+      "n": 26,
+      "finite": 26,
+      "nan_or_inf": 0,
+      "mse": 0.0034064026864190082,
+      "rmse": 0.05836439570850544,
+      "mae": 0.03600923756527098,
+      "max_abs_error": 0.17775028797554226,
+      "r2": 0.9443217379540166
+    },
+    {
+      "protocol": "nested_cv",
+      "method": "grid",
+      "mode": "consequents_one_ulp",
+      "seed": 42,
+      "seconds": 7.387465099978726,
+      "n": 26,
+      "finite": 26,
+      "nan_or_inf": 0,
+      "mse": 0.016683763949974683,
+      "rmse": 0.12916564539371406,
+      "mae": 0.10684694613626532,
+      "max_abs_error": 0.32064371155670446,
+      "r2": 0.7273008899319083
+    },
+    {
+      "protocol": "holdout",
+      "method": "grid",
+      "mode": "consequents_one_ulp",
+      "seed": 42,
+      "seconds": 1.3562846000131685,
+      "n": 6,
+      "finite": 6,
+      "nan_or_inf": 0,
+      "mse": 0.022085426353727445,
+      "rmse": 0.14861166291286645,
+      "mae": 0.1303569155565875,
+      "max_abs_error": 0.23135781357257557,
+      "r2": 0.4685221891983352
+    },
+    {
+      "protocol": "external_theory",
+      "method": "grid",
+      "mode": "consequents_one_ulp",
+      "seed": 42,
+      "seconds": 2.1639666999981273,
+      "n": 30000,
+      "finite": 30000,
+      "nan_or_inf": 0,
+      "mse": 0.06821842716171782,
+      "rmse": 0.26118657538571505,
+      "mae": 0.20014903191627245,
+      "max_abs_error": 0.914647630895699,
+      "r2": 0.4276169042887127
+    },
+    {
+      "protocol": "full_train",
+      "method": "grid",
+      "mode": "consequents_one_ulp",
+      "seed": 42,
+      "seconds": 0.0,
+      "n": 26,
+      "finite": 26,
+      "nan_or_inf": 0,
+      "mse": 0.0006075313058856401,
+      "rmse": 0.024648150151393513,
+      "mae": 0.017658025132036577,
+      "max_abs_error": 0.06802234995896028,
+      "r2": 0.9900697919875706
+    },
+    {
+      "protocol": "nested_cv",
+      "method": "grid",
+      "mode": "joint",
+      "seed": 42,
+      "seconds": 7.143424900015816,
+      "n": 26,
+      "finite": 26,
+      "nan_or_inf": 0,
+      "mse": 0.028075061490450894,
+      "rmse": 0.16755614429334095,
+      "mae": 0.11433119550612938,
+      "max_abs_error": 0.6097511714771007,
+      "r2": 0.5411080912850887
+    },
+    {
+      "protocol": "holdout",
+      "method": "grid",
+      "mode": "joint",
+      "seed": 42,
+      "seconds": 1.2880475000129081,
+      "n": 6,
+      "finite": 6,
+      "nan_or_inf": 0,
+      "mse": 0.023990334288828366,
+      "rmse": 0.15488813475805163,
+      "mae": 0.12816219782515445,
+      "max_abs_error": 0.24104499726336304,
+      "r2": 0.4226812675466104
+    },
+    {
+      "protocol": "external_theory",
+      "method": "grid",
+      "mode": "joint",
+      "seed": 42,
+      "seconds": 2.1266006999940146,
+      "n": 30000,
+      "finite": 30000,
+      "nan_or_inf": 0,
+      "mse": 0.057849548298543975,
+      "rmse": 0.2405193304051547,
+      "mae": 0.18475870729799837,
+      "max_abs_error": 0.8890585585793189,
+      "r2": 0.5146164325641067
+    },
+    {
+      "protocol": "full_train",
+      "method": "grid",
+      "mode": "joint",
+      "seed": 42,
+      "seconds": 0.0,
+      "n": 26,
+      "finite": 26,
+      "nan_or_inf": 0,
+      "mse": 0.0018518181324693758,
+      "rmse": 0.043032756505589735,
+      "mae": 0.027572488648727862,
+      "max_abs_error": 0.14698054862331522,
+      "r2": 0.9697317009371186
+    },
+    {
+      "protocol": "nested_cv",
+      "method": "random",
+      "mode": "consequents_one_ulp",
+      "seed": 42,
+      "seconds": 7.302713099983521,
+      "n": 26,
+      "finite": 26,
+      "nan_or_inf": 0,
+      "mse": 0.03359014740992329,
+      "rmse": 0.183276150685034,
+      "mae": 0.1265559541067686,
+      "max_abs_error": 0.6548858984749106,
+      "r2": 0.4509630240988878
+    },
+    {
+      "protocol": "holdout",
+      "method": "random",
+      "mode": "consequents_one_ulp",
+      "seed": 42,
+      "seconds": 1.3210686999955215,
+      "n": 6,
+      "finite": 6,
+      "nan_or_inf": 0,
+      "mse": 0.01729800714827343,
+      "rmse": 0.13152188847592414,
+      "mae": 0.11812535680226459,
+      "max_abs_error": 0.20644318220250857,
+      "r2": 0.5837297037806886
+    },
+    {
+      "protocol": "external_theory",
+      "method": "random",
+      "mode": "consequents_one_ulp",
+      "seed": 42,
+      "seconds": 2.1447721000004094,
+      "n": 30000,
+      "finite": 30000,
+      "nan_or_inf": 0,
+      "mse": 0.07065529545222422,
+      "rmse": 0.2658106383353086,
+      "mae": 0.20599910089515264,
+      "max_abs_error": 0.9081867454686088,
+      "r2": 0.40717049011598216
+    },
+    {
+      "protocol": "full_train",
+      "method": "random",
+      "mode": "consequents_one_ulp",
+      "seed": 42,
+      "seconds": 0.0,
+      "n": 26,
+      "finite": 26,
+      "nan_or_inf": 0,
+      "mse": 0.00035958353883047873,
+      "rmse": 0.018962688069745774,
+      "mae": 0.014717114955111283,
+      "max_abs_error": 0.04402517626600844,
+      "r2": 0.9941225426511531
+    },
+    {
+      "protocol": "nested_cv",
+      "method": "random",
+      "mode": "joint",
+      "seed": 42,
+      "seconds": 7.298393300006865,
+      "n": 26,
+      "finite": 26,
+      "nan_or_inf": 0,
+      "mse": 0.029737500683097197,
+      "rmse": 0.17244564559042133,
+      "mae": 0.12427039489518868,
+      "max_abs_error": 0.6097511714771007,
+      "r2": 0.513935224914149
+    },
+    {
+      "protocol": "holdout",
+      "method": "random",
+      "mode": "joint",
+      "seed": 42,
+      "seconds": 1.3800483999948483,
+      "n": 6,
+      "finite": 6,
+      "nan_or_inf": 0,
+      "mse": 0.023990334288828366,
+      "rmse": 0.15488813475805163,
+      "mae": 0.12816219782515445,
+      "max_abs_error": 0.24104499726336304,
+      "r2": 0.4226812675466104
+    },
+    {
+      "protocol": "external_theory",
+      "method": "random",
+      "mode": "joint",
+      "seed": 42,
+      "seconds": 2.1328493999899365,
+      "n": 30000,
+      "finite": 30000,
+      "nan_or_inf": 0,
+      "mse": 0.057849548298543975,
+      "rmse": 0.2405193304051547,
+      "mae": 0.18475870729799837,
+      "max_abs_error": 0.8890585585793189,
+      "r2": 0.5146164325641067
+    },
+    {
+      "protocol": "full_train",
+      "method": "random",
+      "mode": "joint",
+      "seed": 42,
+      "seconds": 0.0,
+      "n": 26,
+      "finite": 26,
+      "nan_or_inf": 0,
+      "mse": 0.0018518181324693758,
+      "rmse": 0.043032756505589735,
+      "mae": 0.027572488648727862,
+      "max_abs_error": 0.14698054862331522,
+      "r2": 0.9697317009371186
+    }
+  ],
+  "searches": [
+    {
+      "protocol": "nested_cv",
+      "method": "grid",
+      "mode": "consequents_one_ulp",
+      "seed": 7,
+      "fold": 1,
+      "inner_cv_rmse": 0.18839018552314368,
+      "best_params": {
+        "center_radius": 0.75,
+        "mutation_rate": 0.1
+      },
+      "consequent_max_abs_change": 2.220446049250313e-16
+    },
+    {
+      "protocol": "nested_cv",
+      "method": "grid",
+      "mode": "consequents_one_ulp",
+      "seed": 7,
+      "fold": 2,
+      "inner_cv_rmse": 0.19411808758272944,
+      "best_params": {
+        "center_radius": 0.75,
+        "mutation_rate": 0.3
+      },
+      "consequent_max_abs_change": 2.220446049250313e-16
+    },
+    {
+      "protocol": "nested_cv",
+      "method": "grid",
+      "mode": "consequents_one_ulp",
+      "seed": 7,
+      "fold": 3,
+      "inner_cv_rmse": 0.16057527473275027,
+      "best_params": {
+        "center_radius": 0.25,
+        "mutation_rate": 0.1
+      },
+      "consequent_max_abs_change": 2.220446049250313e-16
+    },
+    {
+      "protocol": "nested_cv",
+      "method": "grid",
+      "mode": "consequents_one_ulp",
+      "seed": 7,
+      "fold": 4,
+      "inner_cv_rmse": 0.1859795101861037,
+      "best_params": {
+        "center_radius": 0.75,
+        "mutation_rate": 0.1
+      },
+      "consequent_max_abs_change": 2.220446049250313e-16
+    },
+    {
+      "protocol": "nested_cv",
+      "method": "grid",
+      "mode": "consequents_one_ulp",
+      "seed": 7,
+      "fold": 5,
+      "inner_cv_rmse": 0.1742879739377099,
+      "best_params": {
+        "center_radius": 0.75,
+        "mutation_rate": 0.3
+      },
+      "consequent_max_abs_change": 2.220446049250313e-16
+    },
+    {
+      "protocol": "holdout",
+      "method": "grid",
+      "mode": "consequents_one_ulp",
+      "seed": 7,
+      "fold": 0,
+      "inner_cv_rmse": 0.1777730915046524,
+      "best_params": {
+        "center_radius": 0.75,
+        "mutation_rate": 0.1
+      },
+      "consequent_max_abs_change": 2.220446049250313e-16
+    },
+    {
+      "protocol": "full_physical_cv",
+      "method": "grid",
+      "mode": "consequents_one_ulp",
+      "seed": 7,
+      "fold": 0,
+      "inner_cv_rmse": 0.16553843135004145,
+      "best_params": {
+        "center_radius": 0.75,
+        "mutation_rate": 0.3
+      },
+      "consequent_max_abs_change": 2.220446049250313e-16
+    },
+    {
+      "protocol": "nested_cv",
+      "method": "grid",
+      "mode": "joint",
+      "seed": 7,
+      "fold": 1,
+      "inner_cv_rmse": 0.17810659031050816,
+      "best_params": {
+        "center_radius": 0.25,
+        "mutation_rate": 0.3
+      },
+      "consequent_max_abs_change": 0.0
+    },
+    {
+      "protocol": "nested_cv",
+      "method": "grid",
+      "mode": "joint",
+      "seed": 7,
+      "fold": 2,
+      "inner_cv_rmse": 0.19400794077678238,
+      "best_params": {
+        "center_radius": 0.75,
+        "mutation_rate": 0.1
+      },
+      "consequent_max_abs_change": 0.1342831336452085
+    },
+    {
+      "protocol": "nested_cv",
+      "method": "grid",
+      "mode": "joint",
+      "seed": 7,
+      "fold": 3,
+      "inner_cv_rmse": 0.20879831679937536,
+      "best_params": {
+        "center_radius": 0.75,
+        "mutation_rate": 0.3
+      },
+      "consequent_max_abs_change": 0.2176803732834115
+    },
+    {
+      "protocol": "nested_cv",
+      "method": "grid",
+      "mode": "joint",
+      "seed": 7,
+      "fold": 4,
+      "inner_cv_rmse": 0.19163342001320516,
+      "best_params": {
+        "center_radius": 0.75,
+        "mutation_rate": 0.1
+      },
+      "consequent_max_abs_change": 0.19466873926805817
+    },
+    {
+      "protocol": "nested_cv",
+      "method": "grid",
+      "mode": "joint",
+      "seed": 7,
+      "fold": 5,
+      "inner_cv_rmse": 0.1801083904325512,
+      "best_params": {
+        "center_radius": 0.75,
+        "mutation_rate": 0.1
+      },
+      "consequent_max_abs_change": 0.29324036310778945
+    },
+    {
+      "protocol": "holdout",
+      "method": "grid",
+      "mode": "joint",
+      "seed": 7,
+      "fold": 0,
+      "inner_cv_rmse": 0.19241850672627245,
+      "best_params": {
+        "center_radius": 0.25,
+        "mutation_rate": 0.1
+      },
+      "consequent_max_abs_change": 0.10062044088849253
+    },
+    {
+      "protocol": "full_physical_cv",
+      "method": "grid",
+      "mode": "joint",
+      "seed": 7,
+      "fold": 0,
+      "inner_cv_rmse": 0.14942330553643168,
+      "best_params": {
+        "center_radius": 0.25,
+        "mutation_rate": 0.3
+      },
+      "consequent_max_abs_change": 0.09563854131641714
+    },
+    {
+      "protocol": "nested_cv",
+      "method": "random",
+      "mode": "consequents_one_ulp",
+      "seed": 7,
+      "fold": 1,
+      "inner_cv_rmse": 0.1609884261911761,
+      "best_params": {
+        "mutation_rate": 0.25,
+        "center_radius": 0.5
+      },
+      "consequent_max_abs_change": 2.220446049250313e-16
+    },
+    {
+      "protocol": "nested_cv",
+      "method": "random",
+      "mode": "consequents_one_ulp",
+      "seed": 7,
+      "fold": 2,
+      "inner_cv_rmse": 0.18920233277251286,
+      "best_params": {
+        "mutation_rate": 0.1,
+        "center_radius": 0.375
+      },
+      "consequent_max_abs_change": 2.220446049250313e-16
+    },
+    {
+      "protocol": "nested_cv",
+      "method": "random",
+      "mode": "consequents_one_ulp",
+      "seed": 7,
+      "fold": 3,
+      "inner_cv_rmse": 0.15717171885618494,
+      "best_params": {
+        "mutation_rate": 0.15,
+        "center_radius": 0.5
+      },
+      "consequent_max_abs_change": 2.220446049250313e-16
+    },
+    {
+      "protocol": "nested_cv",
+      "method": "random",
+      "mode": "consequents_one_ulp",
+      "seed": 7,
+      "fold": 4,
+      "inner_cv_rmse": 0.18557607320267477,
+      "best_params": {
+        "mutation_rate": 0.1,
+        "center_radius": 0.375
+      },
+      "consequent_max_abs_change": 2.220446049250313e-16
+    },
+    {
+      "protocol": "nested_cv",
+      "method": "random",
+      "mode": "consequents_one_ulp",
+      "seed": 7,
+      "fold": 5,
+      "inner_cv_rmse": 0.17984076462643186,
+      "best_params": {
+        "mutation_rate": 0.25,
+        "center_radius": 0.5
+      },
+      "consequent_max_abs_change": 2.220446049250313e-16
+    },
+    {
+      "protocol": "holdout",
+      "method": "random",
+      "mode": "consequents_one_ulp",
+      "seed": 7,
+      "fold": 0,
+      "inner_cv_rmse": 0.18889676594468519,
+      "best_params": {
+        "mutation_rate": 0.1,
+        "center_radius": 0.375
+      },
+      "consequent_max_abs_change": 2.220446049250313e-16
+    },
+    {
+      "protocol": "full_physical_cv",
+      "method": "random",
+      "mode": "consequents_one_ulp",
+      "seed": 7,
+      "fold": 0,
+      "inner_cv_rmse": 0.1633520879357044,
+      "best_params": {
+        "mutation_rate": 0.15,
+        "center_radius": 0.25
+      },
+      "consequent_max_abs_change": 2.220446049250313e-16
+    },
+    {
+      "protocol": "nested_cv",
+      "method": "random",
+      "mode": "joint",
+      "seed": 7,
+      "fold": 1,
+      "inner_cv_rmse": 0.1838409154000511,
+      "best_params": {
+        "mutation_rate": 0.25,
+        "center_radius": 0.5
+      },
+      "consequent_max_abs_change": 0.0
+    },
+    {
+      "protocol": "nested_cv",
+      "method": "random",
+      "mode": "joint",
+      "seed": 7,
+      "fold": 2,
+      "inner_cv_rmse": 0.18450506538077402,
+      "best_params": {
+        "mutation_rate": 0.15,
+        "center_radius": 0.25
+      },
+      "consequent_max_abs_change": 0.16050799710695818
+    },
+    {
+      "protocol": "nested_cv",
+      "method": "random",
+      "mode": "joint",
+      "seed": 7,
+      "fold": 3,
+      "inner_cv_rmse": 0.19226772253639468,
+      "best_params": {
+        "mutation_rate": 0.25,
+        "center_radius": 0.5
+      },
+      "consequent_max_abs_change": 0.37884671431257555
+    },
+    {
+      "protocol": "nested_cv",
+      "method": "random",
+      "mode": "joint",
+      "seed": 7,
+      "fold": 4,
+      "inner_cv_rmse": 0.17423922479496104,
+      "best_params": {
+        "mutation_rate": 0.15,
+        "center_radius": 0.25
+      },
+      "consequent_max_abs_change": 0.24302756502321865
+    },
+    {
+      "protocol": "nested_cv",
+      "method": "random",
+      "mode": "joint",
+      "seed": 7,
+      "fold": 5,
+      "inner_cv_rmse": 0.16643727210101034,
+      "best_params": {
+        "mutation_rate": 0.15,
+        "center_radius": 0.5
+      },
+      "consequent_max_abs_change": 0.22963094903950843
+    },
+    {
+      "protocol": "holdout",
+      "method": "random",
+      "mode": "joint",
+      "seed": 7,
+      "fold": 0,
+      "inner_cv_rmse": 0.21073918138215175,
+      "best_params": {
+        "mutation_rate": 0.15,
+        "center_radius": 0.25
+      },
+      "consequent_max_abs_change": 0.28399024069763357
+    },
+    {
+      "protocol": "full_physical_cv",
+      "method": "random",
+      "mode": "joint",
+      "seed": 7,
+      "fold": 0,
+      "inner_cv_rmse": 0.14876187325053838,
+      "best_params": {
+        "mutation_rate": 0.25,
+        "center_radius": 0.5
+      },
+      "consequent_max_abs_change": 0.19574346549090205
+    },
+    {
+      "protocol": "nested_cv",
+      "method": "grid",
+      "mode": "consequents_one_ulp",
+      "seed": 19,
+      "fold": 1,
+      "inner_cv_rmse": 0.1913989112018247,
+      "best_params": {
+        "center_radius": 0.25,
+        "mutation_rate": 0.1
+      },
+      "consequent_max_abs_change": 2.220446049250313e-16
+    },
+    {
+      "protocol": "nested_cv",
+      "method": "grid",
+      "mode": "consequents_one_ulp",
+      "seed": 19,
+      "fold": 2,
+      "inner_cv_rmse": 0.16705385875955905,
+      "best_params": {
+        "center_radius": 0.25,
+        "mutation_rate": 0.1
+      },
+      "consequent_max_abs_change": 2.220446049250313e-16
+    },
+    {
+      "protocol": "nested_cv",
+      "method": "grid",
+      "mode": "consequents_one_ulp",
+      "seed": 19,
+      "fold": 3,
+      "inner_cv_rmse": 0.148579268343242,
+      "best_params": {
+        "center_radius": 0.25,
+        "mutation_rate": 0.1
+      },
+      "consequent_max_abs_change": 2.220446049250313e-16
+    },
+    {
+      "protocol": "nested_cv",
+      "method": "grid",
+      "mode": "consequents_one_ulp",
+      "seed": 19,
+      "fold": 4,
+      "inner_cv_rmse": 0.222057040342,
+      "best_params": {
+        "center_radius": 0.75,
+        "mutation_rate": 0.3
+      },
+      "consequent_max_abs_change": 2.220446049250313e-16
+    },
+    {
+      "protocol": "nested_cv",
+      "method": "grid",
+      "mode": "consequents_one_ulp",
+      "seed": 19,
+      "fold": 5,
+      "inner_cv_rmse": 0.16284133812410104,
+      "best_params": {
+        "center_radius": 0.75,
+        "mutation_rate": 0.1
+      },
+      "consequent_max_abs_change": 2.220446049250313e-16
+    },
+    {
+      "protocol": "holdout",
+      "method": "grid",
+      "mode": "consequents_one_ulp",
+      "seed": 19,
+      "fold": 0,
+      "inner_cv_rmse": 0.18709684942439822,
+      "best_params": {
+        "center_radius": 0.25,
+        "mutation_rate": 0.3
+      },
+      "consequent_max_abs_change": 2.220446049250313e-16
+    },
+    {
+      "protocol": "full_physical_cv",
+      "method": "grid",
+      "mode": "consequents_one_ulp",
+      "seed": 19,
+      "fold": 0,
+      "inner_cv_rmse": 0.1802273452068173,
+      "best_params": {
+        "center_radius": 0.25,
+        "mutation_rate": 0.1
+      },
+      "consequent_max_abs_change": 2.220446049250313e-16
+    },
+    {
+      "protocol": "nested_cv",
+      "method": "grid",
+      "mode": "joint",
+      "seed": 19,
+      "fold": 1,
+      "inner_cv_rmse": 0.18342344493541043,
+      "best_params": {
+        "center_radius": 0.75,
+        "mutation_rate": 0.1
+      },
+      "consequent_max_abs_change": 0.11996595435719348
+    },
+    {
+      "protocol": "nested_cv",
+      "method": "grid",
+      "mode": "joint",
+      "seed": 19,
+      "fold": 2,
+      "inner_cv_rmse": 0.1813833524657563,
+      "best_params": {
+        "center_radius": 0.75,
+        "mutation_rate": 0.3
+      },
+      "consequent_max_abs_change": 0.011124762739478822
+    },
+    {
+      "protocol": "nested_cv",
+      "method": "grid",
+      "mode": "joint",
+      "seed": 19,
+      "fold": 3,
+      "inner_cv_rmse": 0.19004152698492027,
+      "best_params": {
+        "center_radius": 0.75,
+        "mutation_rate": 0.1
+      },
+      "consequent_max_abs_change": 0.19804270544923142
+    },
+    {
+      "protocol": "nested_cv",
+      "method": "grid",
+      "mode": "joint",
+      "seed": 19,
+      "fold": 4,
+      "inner_cv_rmse": 0.20772870034126245,
+      "best_params": {
+        "center_radius": 0.25,
+        "mutation_rate": 0.3
+      },
+      "consequent_max_abs_change": 0.0
+    },
+    {
+      "protocol": "nested_cv",
+      "method": "grid",
+      "mode": "joint",
+      "seed": 19,
+      "fold": 5,
+      "inner_cv_rmse": 0.16453883962175178,
+      "best_params": {
+        "center_radius": 0.25,
+        "mutation_rate": 0.1
+      },
+      "consequent_max_abs_change": 0.1446005855831759
+    },
+    {
+      "protocol": "holdout",
+      "method": "grid",
+      "mode": "joint",
+      "seed": 19,
+      "fold": 0,
+      "inner_cv_rmse": 0.197419655651909,
+      "best_params": {
+        "center_radius": 0.75,
+        "mutation_rate": 0.1
+      },
+      "consequent_max_abs_change": 0.1886753598399019
+    },
+    {
+      "protocol": "full_physical_cv",
+      "method": "grid",
+      "mode": "joint",
+      "seed": 19,
+      "fold": 0,
+      "inner_cv_rmse": 0.1294483327834664,
+      "best_params": {
+        "center_radius": 0.25,
+        "mutation_rate": 0.1
+      },
+      "consequent_max_abs_change": 0.1803171697368613
+    },
+    {
+      "protocol": "nested_cv",
+      "method": "random",
+      "mode": "consequents_one_ulp",
+      "seed": 19,
+      "fold": 1,
+      "inner_cv_rmse": 0.1603815452659814,
+      "best_params": {
+        "mutation_rate": 0.2,
+        "center_radius": 0.5
+      },
+      "consequent_max_abs_change": 2.220446049250313e-16
+    },
+    {
+      "protocol": "nested_cv",
+      "method": "random",
+      "mode": "consequents_one_ulp",
+      "seed": 19,
+      "fold": 2,
+      "inner_cv_rmse": 0.21076821505503185,
+      "best_params": {
+        "mutation_rate": 0.2,
+        "center_radius": 0.5
+      },
+      "consequent_max_abs_change": 2.220446049250313e-16
+    },
+    {
+      "protocol": "nested_cv",
+      "method": "random",
+      "mode": "consequents_one_ulp",
+      "seed": 19,
+      "fold": 3,
+      "inner_cv_rmse": 0.16276263987677753,
+      "best_params": {
+        "mutation_rate": 0.3,
+        "center_radius": 0.25
+      },
+      "consequent_max_abs_change": 2.220446049250313e-16
+    },
+    {
+      "protocol": "nested_cv",
+      "method": "random",
+      "mode": "consequents_one_ulp",
+      "seed": 19,
+      "fold": 4,
+      "inner_cv_rmse": 0.2221016091658413,
+      "best_params": {
+        "mutation_rate": 0.3,
+        "center_radius": 0.375
+      },
+      "consequent_max_abs_change": 2.220446049250313e-16
+    },
+    {
+      "protocol": "nested_cv",
+      "method": "random",
+      "mode": "consequents_one_ulp",
+      "seed": 19,
+      "fold": 5,
+      "inner_cv_rmse": 0.16785539636505387,
+      "best_params": {
+        "mutation_rate": 0.3,
+        "center_radius": 0.375
+      },
+      "consequent_max_abs_change": 2.220446049250313e-16
+    },
+    {
+      "protocol": "holdout",
+      "method": "random",
+      "mode": "consequents_one_ulp",
+      "seed": 19,
+      "fold": 0,
+      "inner_cv_rmse": 0.17919371553008,
+      "best_params": {
+        "mutation_rate": 0.15,
+        "center_radius": 0.625
+      },
+      "consequent_max_abs_change": 2.220446049250313e-16
+    },
+    {
+      "protocol": "full_physical_cv",
+      "method": "random",
+      "mode": "consequents_one_ulp",
+      "seed": 19,
+      "fold": 0,
+      "inner_cv_rmse": 0.16349105541882705,
+      "best_params": {
+        "mutation_rate": 0.2,
+        "center_radius": 0.5
+      },
+      "consequent_max_abs_change": 2.220446049250313e-16
+    },
+    {
+      "protocol": "nested_cv",
+      "method": "random",
+      "mode": "joint",
+      "seed": 19,
+      "fold": 1,
+      "inner_cv_rmse": 0.18659116319541602,
+      "best_params": {
+        "mutation_rate": 0.2,
+        "center_radius": 0.5
+      },
+      "consequent_max_abs_change": 0.15450930958765285
+    },
+    {
+      "protocol": "nested_cv",
+      "method": "random",
+      "mode": "joint",
+      "seed": 19,
+      "fold": 2,
+      "inner_cv_rmse": 0.1869377774457941,
+      "best_params": {
+        "mutation_rate": 0.15,
+        "center_radius": 0.625
+      },
+      "consequent_max_abs_change": 0.1729281292206558
+    },
+    {
+      "protocol": "nested_cv",
+      "method": "random",
+      "mode": "joint",
+      "seed": 19,
+      "fold": 3,
+      "inner_cv_rmse": 0.17561301601844004,
+      "best_params": {
+        "mutation_rate": 0.15,
+        "center_radius": 0.625
+      },
+      "consequent_max_abs_change": 0.28405189472938197
+    },
+    {
+      "protocol": "nested_cv",
+      "method": "random",
+      "mode": "joint",
+      "seed": 19,
+      "fold": 4,
+      "inner_cv_rmse": 0.20772870034126245,
+      "best_params": {
+        "mutation_rate": 0.3,
+        "center_radius": 0.25
+      },
+      "consequent_max_abs_change": 0.0
+    },
+    {
+      "protocol": "nested_cv",
+      "method": "random",
+      "mode": "joint",
+      "seed": 19,
+      "fold": 5,
+      "inner_cv_rmse": 0.17057206852652138,
+      "best_params": {
+        "mutation_rate": 0.3,
+        "center_radius": 0.25
+      },
+      "consequent_max_abs_change": 0.14967875681134646
+    },
+    {
+      "protocol": "holdout",
+      "method": "random",
+      "mode": "joint",
+      "seed": 19,
+      "fold": 0,
+      "inner_cv_rmse": 0.19786351901601096,
+      "best_params": {
+        "mutation_rate": 0.15,
+        "center_radius": 0.625
+      },
+      "consequent_max_abs_change": 0.41270126369990656
+    },
+    {
+      "protocol": "full_physical_cv",
+      "method": "random",
+      "mode": "joint",
+      "seed": 19,
+      "fold": 0,
+      "inner_cv_rmse": 0.1313167482436192,
+      "best_params": {
+        "mutation_rate": 0.3,
+        "center_radius": 0.375
+      },
+      "consequent_max_abs_change": 0.0
+    },
+    {
+      "protocol": "nested_cv",
+      "method": "grid",
+      "mode": "consequents_one_ulp",
+      "seed": 42,
+      "fold": 1,
+      "inner_cv_rmse": 0.16320211008553337,
+      "best_params": {
+        "center_radius": 0.25,
+        "mutation_rate": 0.3
+      },
+      "consequent_max_abs_change": 2.220446049250313e-16
+    },
+    {
+      "protocol": "nested_cv",
+      "method": "grid",
+      "mode": "consequents_one_ulp",
+      "seed": 42,
+      "fold": 2,
+      "inner_cv_rmse": 0.22829366200313084,
+      "best_params": {
+        "center_radius": 0.75,
+        "mutation_rate": 0.1
+      },
+      "consequent_max_abs_change": 2.220446049250313e-16
+    },
+    {
+      "protocol": "nested_cv",
+      "method": "grid",
+      "mode": "consequents_one_ulp",
+      "seed": 42,
+      "fold": 3,
+      "inner_cv_rmse": 0.14908850747159236,
+      "best_params": {
+        "center_radius": 0.75,
+        "mutation_rate": 0.3
+      },
+      "consequent_max_abs_change": 2.220446049250313e-16
+    },
+    {
+      "protocol": "nested_cv",
+      "method": "grid",
+      "mode": "consequents_one_ulp",
+      "seed": 42,
+      "fold": 4,
+      "inner_cv_rmse": 0.2225327433214114,
+      "best_params": {
+        "center_radius": 0.25,
+        "mutation_rate": 0.3
+      },
+      "consequent_max_abs_change": 2.220446049250313e-16
+    },
+    {
+      "protocol": "nested_cv",
+      "method": "grid",
+      "mode": "consequents_one_ulp",
+      "seed": 42,
+      "fold": 5,
+      "inner_cv_rmse": 0.15867360004956235,
+      "best_params": {
+        "center_radius": 0.75,
+        "mutation_rate": 0.3
+      },
+      "consequent_max_abs_change": 2.220446049250313e-16
+    },
+    {
+      "protocol": "holdout",
+      "method": "grid",
+      "mode": "consequents_one_ulp",
+      "seed": 42,
+      "fold": 0,
+      "inner_cv_rmse": 0.19249013488061606,
+      "best_params": {
+        "center_radius": 0.25,
+        "mutation_rate": 0.3
+      },
+      "consequent_max_abs_change": 2.220446049250313e-16
+    },
+    {
+      "protocol": "full_physical_cv",
+      "method": "grid",
+      "mode": "consequents_one_ulp",
+      "seed": 42,
+      "fold": 0,
+      "inner_cv_rmse": 0.15523494419877173,
+      "best_params": {
+        "center_radius": 0.25,
+        "mutation_rate": 0.1
+      },
+      "consequent_max_abs_change": 2.220446049250313e-16
+    },
+    {
+      "protocol": "nested_cv",
+      "method": "grid",
+      "mode": "joint",
+      "seed": 42,
+      "fold": 1,
+      "inner_cv_rmse": 0.18056836124732875,
+      "best_params": {
+        "center_radius": 0.25,
+        "mutation_rate": 0.3
+      },
+      "consequent_max_abs_change": 0.2636216464041484
+    },
+    {
+      "protocol": "nested_cv",
+      "method": "grid",
+      "mode": "joint",
+      "seed": 42,
+      "fold": 2,
+      "inner_cv_rmse": 0.18694481710361546,
+      "best_params": {
+        "center_radius": 0.75,
+        "mutation_rate": 0.1
+      },
+      "consequent_max_abs_change": 0.15258015653421853
+    },
+    {
+      "protocol": "nested_cv",
+      "method": "grid",
+      "mode": "joint",
+      "seed": 42,
+      "fold": 3,
+      "inner_cv_rmse": 0.17335012445954692,
+      "best_params": {
+        "center_radius": 0.25,
+        "mutation_rate": 0.1
+      },
+      "consequent_max_abs_change": 0.3808217876190858
+    },
+    {
+      "protocol": "nested_cv",
+      "method": "grid",
+      "mode": "joint",
+      "seed": 42,
+      "fold": 4,
+      "inner_cv_rmse": 0.18193781562936806,
+      "best_params": {
+        "center_radius": 0.75,
+        "mutation_rate": 0.3
+      },
+      "consequent_max_abs_change": 0.0
+    },
+    {
+      "protocol": "nested_cv",
+      "method": "grid",
+      "mode": "joint",
+      "seed": 42,
+      "fold": 5,
+      "inner_cv_rmse": 0.1535574050790419,
+      "best_params": {
+        "center_radius": 0.25,
+        "mutation_rate": 0.1
+      },
+      "consequent_max_abs_change": 0.21207195922669275
+    },
+    {
+      "protocol": "holdout",
+      "method": "grid",
+      "mode": "joint",
+      "seed": 42,
+      "fold": 0,
+      "inner_cv_rmse": 0.1986431524698102,
+      "best_params": {
+        "center_radius": 0.25,
+        "mutation_rate": 0.1
+      },
+      "consequent_max_abs_change": 0.17117481560727976
+    },
+    {
+      "protocol": "full_physical_cv",
+      "method": "grid",
+      "mode": "joint",
+      "seed": 42,
+      "fold": 0,
+      "inner_cv_rmse": 0.13543902940063948,
+      "best_params": {
+        "center_radius": 0.25,
+        "mutation_rate": 0.1
+      },
+      "consequent_max_abs_change": 0.29407149358440976
+    },
+    {
+      "protocol": "nested_cv",
+      "method": "random",
+      "mode": "consequents_one_ulp",
+      "seed": 42,
+      "fold": 1,
+      "inner_cv_rmse": 0.1848127444085261,
+      "best_params": {
+        "mutation_rate": 0.1,
+        "center_radius": 0.25
+      },
+      "consequent_max_abs_change": 2.220446049250313e-16
+    },
+    {
+      "protocol": "nested_cv",
+      "method": "random",
+      "mode": "consequents_one_ulp",
+      "seed": 42,
+      "fold": 2,
+      "inner_cv_rmse": 0.16468589912983167,
+      "best_params": {
+        "mutation_rate": 0.25,
+        "center_radius": 0.75
+      },
+      "consequent_max_abs_change": 2.220446049250313e-16
+    },
+    {
+      "protocol": "nested_cv",
+      "method": "random",
+      "mode": "consequents_one_ulp",
+      "seed": 42,
+      "fold": 3,
+      "inner_cv_rmse": 0.19486123285808513,
+      "best_params": {
+        "mutation_rate": 0.1,
+        "center_radius": 0.25
+      },
+      "consequent_max_abs_change": 2.220446049250313e-16
+    },
+    {
+      "protocol": "nested_cv",
+      "method": "random",
+      "mode": "consequents_one_ulp",
+      "seed": 42,
+      "fold": 4,
+      "inner_cv_rmse": 0.21022581931634243,
+      "best_params": {
+        "mutation_rate": 0.25,
+        "center_radius": 0.375
+      },
+      "consequent_max_abs_change": 2.220446049250313e-16
+    },
+    {
+      "protocol": "nested_cv",
+      "method": "random",
+      "mode": "consequents_one_ulp",
+      "seed": 42,
+      "fold": 5,
+      "inner_cv_rmse": 0.16828641253211307,
+      "best_params": {
+        "mutation_rate": 0.1,
+        "center_radius": 0.25
+      },
+      "consequent_max_abs_change": 2.220446049250313e-16
+    },
+    {
+      "protocol": "holdout",
+      "method": "random",
+      "mode": "consequents_one_ulp",
+      "seed": 42,
+      "fold": 0,
+      "inner_cv_rmse": 0.18719536311868643,
+      "best_params": {
+        "mutation_rate": 0.15,
+        "center_radius": 0.625
+      },
+      "consequent_max_abs_change": 2.220446049250313e-16
+    },
+    {
+      "protocol": "full_physical_cv",
+      "method": "random",
+      "mode": "consequents_one_ulp",
+      "seed": 42,
+      "fold": 0,
+      "inner_cv_rmse": 0.14718305760003472,
+      "best_params": {
+        "mutation_rate": 0.15,
+        "center_radius": 0.625
+      },
+      "consequent_max_abs_change": 2.220446049250313e-16
+    },
+    {
+      "protocol": "nested_cv",
+      "method": "random",
+      "mode": "joint",
+      "seed": 42,
+      "fold": 1,
+      "inner_cv_rmse": 0.1842198516194772,
+      "best_params": {
+        "mutation_rate": 0.25,
+        "center_radius": 0.375
+      },
+      "consequent_max_abs_change": 0.21188572185912657
+    },
+    {
+      "protocol": "nested_cv",
+      "method": "random",
+      "mode": "joint",
+      "seed": 42,
+      "fold": 2,
+      "inner_cv_rmse": 0.17604662366093185,
+      "best_params": {
+        "mutation_rate": 0.25,
+        "center_radius": 0.375
+      },
+      "consequent_max_abs_change": 0.12757201262696816
+    },
+    {
+      "protocol": "nested_cv",
+      "method": "random",
+      "mode": "joint",
+      "seed": 42,
+      "fold": 3,
+      "inner_cv_rmse": 0.17335012445954692,
+      "best_params": {
+        "mutation_rate": 0.1,
+        "center_radius": 0.25
+      },
+      "consequent_max_abs_change": 0.3808217876190858
+    },
+    {
+      "protocol": "nested_cv",
+      "method": "random",
+      "mode": "joint",
+      "seed": 42,
+      "fold": 4,
+      "inner_cv_rmse": 0.2325006855283437,
+      "best_params": {
+        "mutation_rate": 0.15,
+        "center_radius": 0.625
+      },
+      "consequent_max_abs_change": 0.3048237058503436
+    },
+    {
+      "protocol": "nested_cv",
+      "method": "random",
+      "mode": "joint",
+      "seed": 42,
+      "fold": 5,
+      "inner_cv_rmse": 0.1535574050790419,
+      "best_params": {
+        "mutation_rate": 0.1,
+        "center_radius": 0.25
+      },
+      "consequent_max_abs_change": 0.21207195922669275
+    },
+    {
+      "protocol": "holdout",
+      "method": "random",
+      "mode": "joint",
+      "seed": 42,
+      "fold": 0,
+      "inner_cv_rmse": 0.1986431524698102,
+      "best_params": {
+        "mutation_rate": 0.1,
+        "center_radius": 0.25
+      },
+      "consequent_max_abs_change": 0.17117481560727976
+    },
+    {
+      "protocol": "full_physical_cv",
+      "method": "random",
+      "mode": "joint",
+      "seed": 42,
+      "fold": 0,
+      "inner_cv_rmse": 0.13543902940063948,
+      "best_params": {
+        "mutation_rate": 0.1,
+        "center_radius": 0.25
+      },
+      "consequent_max_abs_change": 0.29407149358440976
+    }
+  ]
+}
