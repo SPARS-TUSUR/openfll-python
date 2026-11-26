@@ -182,19 +182,53 @@ grid.fit(X_train, y_train)
 
 С backend из `python/pybind`, содержащим GA, собранный движок Сугено или
 Мамдани с одним выходом предоставляет `fit_ga(X, y, input_names=...)`.
-Метод обучает параметры функций принадлежности и возвращает историю
-потерь по поколениям. `set_mf_bounds(var_name, mf_name, bounds)` задаёт
-диапазоны параметров отдельной функции принадлежности.
+Метод обучает параметры функций принадлежности (включая антецеденты и консеквенты)
+и возвращает историю потерь по поколениям. `set_mf_bounds(var_name, mf_name, bounds)`
+задаёт диапазоны параметров отдельной функции принадлежности.
 
-`openfll.sklearn.SugenoGARegressor` вызывает этот метод внутри `fit()`.
-Структура правил задаётся через `SugenoModelSpec`. Для каждого фолда
-scikit-learn строится новый движок, а `random_state` задаёт seed C++.
-Настройки GA и нормы можно подбирать через `GridSearchCV` или
-`RandomizedSearchCV`.
+`openfll.sklearn.SugenoGARegressor` вызывает этот метод внутри `fit()`:
+- структура правил задаётся через `SugenoModelSpec`;
+- консеквенты по умолчанию инициализируются `mean(y)`;
+- для каждого CV-фолда `scikit-learn` строится изолированный C++ движок, а `random_state` задаёт seed;
+- настройки GA (`mutation_rate`, `mutation_sigma`, `crossover_rate`, `default_t_norm`) можно подбирать через `GridSearchCV` или `RandomizedSearchCV`.
 
-Запустите [пример сравнения двух методов поиска](examples/06_ga_search.py).
-Он использует одинаковые CV-фолды, метрику и число конфигураций, а итоговую
-RMSE измеряет на отложенной выборке.
+```python
+from sklearn.model_selection import GridSearchCV
+from openfll.sklearn import SugenoGARegressor, SugenoModelSpec
+
+# Даже при вырожденных одинаковых стартовых MF GA восстанавливает форму зависимости
+spec = SugenoModelSpec(
+    inputs={"x": [("low", "gaussian", [0.0, 0.6]), ("high", "gaussian", [0.0, 0.6])]},
+    rules=['IF x IS "low" THEN y IS "left"', 'IF x IS "high" THEN y IS "right"'],
+)
+estimator = SugenoGARegressor(
+    spec,
+    mf_bounds={("x", "low"): [(-1.0, 1.0), (0.35, 1.0)], ("x", "high"): [(-1.0, 1.0), (0.35, 1.0)]},
+    population_size=32,
+    generations=40,
+)
+search = GridSearchCV(estimator, {"mutation_rate": [0.15, 0.35], "mutation_sigma": [0.1, 0.2]}, cv=3)
+search.fit(X_train, y_train)
+```
+
+#### Пример `examples/06_ga_search.py`
+
+Запустите [пример сравнения МНК и GA с GridSearchCV / RandomizedSearchCV](examples/06_ga_search.py)
+(опционально передайте `--save-plots build/ga_plots`, чтобы сохранить графики MF до и после обучения):
+
+```bash
+python examples/06_ga_search.py
+```
+
+Скрипт использует единые 3-fold CV фолды, метрику `neg_root_mean_squared_error` и 8 кандидатов для обоих методов поиска, оценивая итоговые метрики на отложенной (25% holdout) выборке (медиана по `seed ∈ {7, 19, 42}`):
+
+| Сценарий | Фиксированные MF (`МНК`) | `GridSearchCV + GA` | `RandomizedSearchCV + GA` |
+|---|---|---|---|
+| **1. Вырожденные MF** (`1D: y = tanh(3x)`) | `RMSE = 0.8248`, `R² = -0.015` | **`RMSE = 0.0118`**, `R² = 0.9998` | **`RMSE = 0.0080`**, `R² = 0.9999` |
+| **2. Грубые/смещённые MF** (`2D: shifted tanh`) | `RMSE = 0.8391`, `R² = 0.616` | **`RMSE = 0.0770`**, `R² = 0.9968` | **`RMSE = 0.1907`**, `R² = 0.9802` |
+| **3. Экспертные MF** (`load_diabetes: bmi, bp`) | **`RMSE = 58.8160`**, `R² = 0.374` | `RMSE = 60.1456`, `R² = 0.346` | `RMSE = 60.2278`, `R² = 0.344` |
+
+Когда стартовые MF вырождены или плохо согласованы с данными, GA снижает ошибку на отложенной выборке в 10–100 раз; когда же экспертная сетка уже удачно задана (как в `load_diabetes`), аналитический МНК (`SugenoRegressor`) остаётся быстрым и сильным базовым решением.
 
 ## Производительность (Результаты бенчмаркинга)
 
