@@ -40,6 +40,7 @@ __all__ = [
     "MfType",
     "TNorms",
     "SNorms",
+    "LossType",
     "constant",
     "triangular",
     "trapezoidal",
@@ -113,6 +114,7 @@ TNorms = Literal[
 SNorms = Literal[
     "max", "algebraic_sum", "bounded_sum", "drastic_sum", "einstein_sum", "hamacher_sum"
 ]
+LossType = Literal["mse", "rmse", "mae"]
 
 
 def constant(value: float) -> list[float]:

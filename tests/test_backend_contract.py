@@ -63,6 +63,7 @@ def test_openfll_keeps_public_symbols_with_backend(tmp_path, monkeypatch):
     assert hasattr(openfll, "MfType")
     assert hasattr(openfll, "TNorms")
     assert hasattr(openfll, "SNorms")
+    assert hasattr(openfll, "LossType")
     assert hasattr(openfll, "monte_carlo")
     assert hasattr(openfll, "grid_2d")
     assert hasattr(openfll, "check_output_finite")
@@ -78,6 +79,7 @@ def test_openfll_keeps_public_symbols_with_backend(tmp_path, monkeypatch):
         "MfType",
         "TNorms",
         "SNorms",
+        "LossType",
         "constant",
         "triangular",
         "trapezoidal",

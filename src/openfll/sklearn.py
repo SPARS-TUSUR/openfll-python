@@ -1,14 +1,11 @@
-"""scikit-learn совместимый регрессор на базе нечёткой модели Sugeno нулевого порядка.
-
-Предоставляет `SugenoRegressor` — эстимейтор для обучения числовых констант
-заключений правил методом наименьших квадратов (МНК / Ridge) и выполнения
-пакетного инференса через C++ ядро OpenFLL.
-"""
+"""Регрессоры Sugeno для обучения через МНК, Ridge и нативный генетический алгоритм."""
 from __future__ import annotations
 
 import re
+from inspect import signature
+from operator import index
 from dataclasses import dataclass, field
-from typing import Any, Mapping, Sequence
+from typing import Any, Literal, Mapping, Sequence
 
 import numpy as np
 
@@ -22,13 +19,7 @@ except ImportError:
     # Заглушки для сред без установленного scikit-learn
     class BaseEstimator:  # type: ignore[no-redef]
         def get_params(self, deep: bool = True) -> dict[str, Any]:
-            return {
-                "model_spec": getattr(self, "model_spec", None),
-                "default_t_norm": getattr(self, "default_t_norm", None),
-                "default_s_norm": getattr(self, "default_s_norm", None),
-                "solver": getattr(self, "solver", "lstsq"),
-                "alpha": getattr(self, "alpha", 0.0),
-            }
+            return {name: getattr(self, name) for name in signature(type(self)).parameters}
 
         def set_params(self, **params: Any) -> Any:
             for k, v in params.items():
@@ -75,7 +66,7 @@ except ImportError:
         return X_arr, y_arr
 
 
-__all__ = ["FrozenDict", "SugenoModelSpec", "SugenoRegressor"]
+__all__ = ["FrozenDict", "SugenoModelSpec", "SugenoRegressor", "SugenoGARegressor"]
 
 _THEN_RE = re.compile(
     r"\bTHEN\b\s+(?:\w+)\s+\bIS\b\s+[\"']?([^\"'\s,;]+)[\"']?",
@@ -185,65 +176,11 @@ class SugenoModelSpec:
             object.__setattr__(self, "consequents", tuple(str(c) for c in self.consequents))
 
 
-class SugenoRegressor(BaseEstimator, RegressorMixin):
-    """scikit-learn совместимый регрессор на базе нечёткой модели Sugeno нулевого порядка.
-
-    Обучает числовые константы заключений правил фиксированной нечёткой структуры
-    методом наименьших квадратов (МНК или Ridge) с использованием нативного
-    C++ ядра OpenFLL.
-
-    Методы fit и predict работают с матрицами признаков формы
-    ``(n_samples, n_features)`` в соответствии с интерфейсом scikit-learn.
-
-    Предупреждение:
-        Инстанс не является потокобезопасным для инференса. Для многопоточной
-        обработки необходимо клонировать модель или создать независимые экземпляры.
-
-    Параметры:
-        model_spec: Декларативная спецификация модели (SugenoModelSpec или dict).
-        default_t_norm: t-норма по умолчанию для нечётких правил ("min", "prod_and", ...).
-        default_s_norm: s-норма по умолчанию ("max", "algebraic_sum", ...).
-        solver: Алгоритм решения задачи регрессии ("lstsq" или "ridge").
-        alpha: Параметр регуляризации (L2) для Ridge (требуется alpha > 0 при solver='ridge').
-
-    Атрибуты после обучения:
-        engine_: Обученный нативный экземпляр openfll.SugenoEngine.
-        coef_: 1D массив подобранных констант заключений правил (np.float64).
-        consequents_: Список имён констант заключений, соответствующих coef_.
-        rule_names_: Список имён правил ('rule_0', 'rule_1', ...).
-        n_features_in_: Число входных признаков обучающей выборки.
-        feature_names_in_: Имена признаков (если передавались через DataFrame).
-        rank_: Численный ранг матрицы влияния правил (design matrix).
-    """
-
-    def __init__(
-        self,
-        model_spec: Mapping[str, Any] | SugenoModelSpec | None = None,
-        *,
-        default_t_norm: str | None = None,
-        default_s_norm: str | None = None,
-        solver: str = "lstsq",
-        alpha: float = 0.0,
-    ) -> None:
-        self.model_spec = model_spec
-        self.default_t_norm = default_t_norm
-        self.default_s_norm = default_s_norm
-        self.solver = solver
-        self.alpha = alpha
-
-    def __getstate__(self) -> dict[str, Any]:
-        """Возвращает состояние для сериализации через pickle/joblib без нативного engine_."""
-        state = self.__dict__.copy()
-        state.pop("engine_", None)
-        return state
-
-    def __setstate__(self, state: dict[str, Any]) -> None:
-        """Восстанавливает состояние и пересоздаёт C++ engine_ при десериализации."""
-        self.__dict__.update(state)
-        if hasattr(self, "coef_") and hasattr(self, "consequents_") and self.model_spec is not None:
-            spec = self._normalize_spec()
-            fitted_vals = {name: float(self.coef_[m]) for m, name in enumerate(self.consequents_)}
-            self.engine_ = self._build_engine(spec, fitted_vals, self.consequents_)
+class _BaseSugenoRegressor(RegressorMixin, BaseEstimator):
+    model_spec: Mapping[str, Any] | SugenoModelSpec | None
+    default_t_norm: str | None
+    default_s_norm: str | None
+    engine_: openfll.SugenoEngine
 
     def _normalize_spec(self) -> SugenoModelSpec:
         """Привести model_spec к нормализованному экземпляру SugenoModelSpec."""
@@ -359,9 +296,13 @@ class SugenoRegressor(BaseEstimator, RegressorMixin):
         spec: SugenoModelSpec,
         consequent_values: Mapping[str, float],
         consequent_names: Sequence[str],
+        *,
+        defuzzer: Literal["wtaver", "wtsum"] | None = None,
     ) -> openfll.SugenoEngine:
         """Построить и скомпилировать экземпляр SugenoEngine с заданными константами."""
         engine = openfll.SugenoEngine()
+        if defuzzer is not None:
+            engine.set_defuzzer(defuzzer)
 
         t_norm = self.default_t_norm or spec.default_t_norm
         s_norm = self.default_s_norm or spec.default_s_norm
@@ -404,17 +345,9 @@ class SugenoRegressor(BaseEstimator, RegressorMixin):
         engine.build()
         return engine
 
-    def fit(self, X: Any, y: Any) -> "SugenoRegressor":
-        """Обучить константы заключений правил модели Sugeno нулевого порядка методом МНК."""
-        if self.model_spec is None:
-            raise ValueError("model_spec must be specified before calling fit().")
-
-        if isinstance(self.alpha, bool) or not np.isfinite(self.alpha) or self.alpha < 0.0:
-            raise ValueError(
-                f"Regularization parameter alpha must be non-negative and finite, got {self.alpha}"
-            )
-
-        spec = self._normalize_spec()
+    def _validate_fit_data(
+        self, spec: SugenoModelSpec, X: Any, y: Any
+    ) -> tuple[np.ndarray, np.ndarray, list[str], list[str] | None]:
         if not spec.inputs:
             raise ValueError("model_spec.inputs must define at least one input variable.")
         if not spec.rules:
@@ -433,7 +366,7 @@ class SugenoRegressor(BaseEstimator, RegressorMixin):
             multi_output=False,
         )
 
-        input_names = list(spec.inputs.keys())
+        input_names = list(spec.inputs)
         if X_arr.shape[1] != len(input_names):
             raise ValueError(
                 f"X has {X_arr.shape[1]} features, but model_spec expects {len(input_names)} "
@@ -444,6 +377,124 @@ class SugenoRegressor(BaseEstimator, RegressorMixin):
             raise ValueError(
                 f"Feature names in X {feature_names} do not match model_spec inputs {input_names}."
             )
+        return X_arr, y_arr, input_names, feature_names
+
+    def _store_feature_metadata(self, count: int, feature_names: list[str] | None) -> None:
+        self.n_features_in_ = count
+        if feature_names is not None:
+            self.feature_names_in_ = np.asarray(feature_names, dtype=object)
+        elif hasattr(self, "feature_names_in_"):
+            delattr(self, "feature_names_in_")
+
+    def predict(self, X: Any) -> np.ndarray:
+        """Выполнить batch inference на обученной модели.
+
+        Принимает матрицу признаков формы ``(n_samples, n_features)`` и всегда
+        возвращает одномерный массив NumPy формы ``(n_samples,)``.
+
+        Предупреждение:
+            Инстанс не является потокобезопасным для инференса. Для многопоточной
+            обработки необходимо клонировать модель или создать независимые экземпляры.
+        """
+        check_is_fitted(self, attributes="engine_")
+
+        feature_names = None
+        if hasattr(X, "columns"):
+            feature_names = [str(c) for c in X.columns]
+
+        X_arr = check_array(X, accept_sparse=False, dtype=np.float64)
+
+        if X_arr.shape[1] != self.n_features_in_:
+            raise ValueError(
+                f"X has {X_arr.shape[1]} features, but {type(self).__name__} is fitted with {self.n_features_in_} features"
+            )
+
+        if feature_names is not None and hasattr(self, "feature_names_in_"):
+            expected = list(self.feature_names_in_)
+            if feature_names != expected:
+                raise ValueError(
+                    f"The feature names should match those that were passed during fit.\n"
+                    f"Feature names seen at fit time: {expected}\n"
+                    f"Feature names seen at predict time: {feature_names}"
+                )
+
+        spec = self._normalize_spec()
+        input_names = list(spec.inputs.keys())
+        return self.engine_.predict_batch(X_arr, input_names=input_names)
+
+
+class SugenoRegressor(_BaseSugenoRegressor):
+    """scikit-learn совместимый регрессор на базе нечёткой модели Sugeno нулевого порядка.
+
+    Обучает числовые константы заключений правил фиксированной нечёткой структуры
+    методом наименьших квадратов (МНК или Ridge) с использованием нативного
+    C++ ядра OpenFLL.
+
+    Методы fit и predict работают с матрицами признаков формы
+    ``(n_samples, n_features)`` в соответствии с интерфейсом scikit-learn.
+
+    Предупреждение:
+        Инстанс не является потокобезопасным для инференса. Для многопоточной
+        обработки необходимо клонировать модель или создать независимые экземпляры.
+
+    Параметры:
+        model_spec: Декларативная спецификация модели (SugenoModelSpec или dict).
+        default_t_norm: t-норма по умолчанию для нечётких правил ("min", "prod_and", ...).
+        default_s_norm: s-норма по умолчанию ("max", "algebraic_sum", ...).
+        solver: Алгоритм решения задачи регрессии ("lstsq" или "ridge").
+        alpha: Параметр регуляризации (L2) для Ridge (требуется alpha > 0 при solver='ridge').
+
+    Атрибуты после обучения:
+        engine_: Обученный нативный экземпляр openfll.SugenoEngine.
+        coef_: 1D массив подобранных констант заключений правил (np.float64).
+        consequents_: Список имён констант заключений, соответствующих coef_.
+        rule_names_: Список имён правил ('rule_0', 'rule_1', ...).
+        n_features_in_: Число входных признаков обучающей выборки.
+        feature_names_in_: Имена признаков (если передавались через DataFrame).
+        rank_: Численный ранг матрицы влияния правил (design matrix).
+    """
+
+    def __init__(
+        self,
+        model_spec: Mapping[str, Any] | SugenoModelSpec | None = None,
+        *,
+        default_t_norm: str | None = None,
+        default_s_norm: str | None = None,
+        solver: str = "lstsq",
+        alpha: float = 0.0,
+    ) -> None:
+        self.model_spec = model_spec
+        self.default_t_norm = default_t_norm
+        self.default_s_norm = default_s_norm
+        self.solver = solver
+        self.alpha = alpha
+
+    def __getstate__(self) -> dict[str, Any]:
+        """Возвращает состояние для сериализации через pickle/joblib без нативного engine_."""
+        state = self.__dict__.copy()
+        state.pop("engine_", None)
+        return state
+
+    def __setstate__(self, state: dict[str, Any]) -> None:
+        """Восстанавливает состояние и пересоздаёт C++ engine_ при десериализации."""
+        self.__dict__.update(state)
+        if hasattr(self, "coef_") and hasattr(self, "consequents_") and self.model_spec is not None:
+            spec = self._normalize_spec()
+            fitted_vals = {name: float(self.coef_[m]) for m, name in enumerate(self.consequents_)}
+            self.engine_ = self._build_engine(spec, fitted_vals, self.consequents_)
+
+    def fit(self, X: Any, y: Any) -> "SugenoRegressor":
+        """Обучить константы заключений правил модели Sugeno нулевого порядка методом МНК."""
+        if self.model_spec is None:
+            raise ValueError("model_spec must be specified before calling fit().")
+
+        if isinstance(self.alpha, bool) or not np.isfinite(self.alpha) or self.alpha < 0.0:
+            raise ValueError(
+                f"Regularization parameter alpha must be non-negative and finite, got {self.alpha}"
+            )
+
+        spec = self._normalize_spec()
+        X_arr, y_arr, input_names, feature_names = self._validate_fit_data(spec, X, y)
 
         consequent_names = self._resolve_consequents(spec)
         if not consequent_names:
@@ -501,46 +552,196 @@ class SugenoRegressor(BaseEstimator, RegressorMixin):
         self.consequents_ = list(consequent_names)
         self.rule_names_ = [f"rule_{i}" for i in range(len(spec.rules))]
         self.rank_ = int(rank)
-        self.n_features_in_ = X_arr.shape[1]
-        if feature_names is not None:
-            self.feature_names_in_ = np.asarray(feature_names, dtype=object)
-        elif hasattr(self, "feature_names_in_"):
-            delattr(self, "feature_names_in_")
+        self._store_feature_metadata(X_arr.shape[1], feature_names)
 
         return self
 
-    def predict(self, X: Any) -> np.ndarray:
-        """Выполнить batch inference на обученной модели.
 
-        Принимает матрицу признаков формы ``(n_samples, n_features)`` и всегда
-        возвращает одномерный массив NumPy формы ``(n_samples,)``.
+class SugenoGARegressor(_BaseSugenoRegressor):
+    """Обучает входные функции принадлежности и константы заключений через C++ GA.
 
-        Предупреждение:
-            Инстанс не является потокобезопасным для инференса. Для многопоточной
-            обработки необходимо клонировать модель или создать независимые экземпляры.
-        """
-        check_is_fitted(self, attributes=["engine_", "coef_"])
+    Каждый fit собирает новый движок по model_spec и сохраняет его в engine_.
+    Константы заключений инициализируются средним значением целевой переменной
+    ``mean(y)``, чтобы авто-границы не растягивались к нулю на смещённых данных.
+    ``mf_bounds`` при необходимости задаёт диапазоны параметров по ключу
+    ``(имя переменной, имя MF)``. Остальные диапазоны движок вычисляет из
+    обучающей выборки. ``loss_history_`` содержит историю потерь, возвращённую
+    нативным ``fit_ga``.
 
-        feature_names = None
-        if hasattr(X, "columns"):
-            feature_names = [str(c) for c in X.columns]
+    Примечание:
+        При кросс-валидации с компактными функциями принадлежности
+        (``triangular``, ``trapezoidal``) рекомендуется задавать внешние границы
+        через ``mf_bounds`` либо использовать ``gaussian`` MF, чтобы смещение
+        опорных точек на train-фолде не приводило к нулевой суммарной активации
+        (``NaN`` в режиме ``wtaver``) на крайних точках test-фолда.
+    """
 
-        X_arr = check_array(X, accept_sparse=False, dtype=np.float64)
+    def __init__(
+        self,
+        model_spec: Mapping[str, Any] | SugenoModelSpec | None = None,
+        *,
+        default_t_norm: str | None = None,
+        default_s_norm: str | None = None,
+        defuzzer: Literal["wtaver", "wtsum"] = "wtaver",
+        mf_bounds: Mapping[tuple[str, str], Sequence[tuple[float, float]]] | None = None,
+        population_size: int = 50,
+        generations: int = 100,
+        crossover_rate: float = 0.8,
+        mutation_rate: float = 0.15,
+        mutation_sigma: float = 0.1,
+        tournament_size: int = 3,
+        elitism_count: int = 2,
+        loss: Literal["mse", "rmse", "mae"] = "mse",
+        random_state: int | np.random.RandomState | np.random.Generator | None = 42,
+    ) -> None:
+        self.model_spec = model_spec
+        self.default_t_norm = default_t_norm
+        self.default_s_norm = default_s_norm
+        self.defuzzer = defuzzer
+        self.mf_bounds = mf_bounds
+        self.population_size = population_size
+        self.generations = generations
+        self.crossover_rate = crossover_rate
+        self.mutation_rate = mutation_rate
+        self.mutation_sigma = mutation_sigma
+        self.tournament_size = tournament_size
+        self.elitism_count = elitism_count
+        self.loss = loss
+        self.random_state = random_state
 
-        if X_arr.shape[1] != self.n_features_in_:
+    @staticmethod
+    def _validate_int(value: Any, name: str) -> int:
+        if isinstance(value, bool):
+            raise ValueError(f"{name} must be an integer, not bool.")
+        return index(value)
+
+    @staticmethod
+    def _validate_float(value: Any, name: str) -> float:
+        if isinstance(value, bool):
+            raise ValueError(f"{name} must be a finite real number, not bool.")
+        fval = float(value)
+        if not np.isfinite(fval):
+            raise ValueError("GA rates and mutation_sigma must be finite.")
+        return fval
+
+    def _validate_ga_params(self) -> tuple[int, int, float, float, float, int, int, int]:
+        if not isinstance(self.defuzzer, str) or self.defuzzer not in ("wtaver", "wtsum"):
             raise ValueError(
-                f"X has {X_arr.shape[1]} features, but {type(self).__name__} is fitted with {self.n_features_in_} features"
+                f"Unknown defuzzer: {self.defuzzer!r}. Supported defuzzers are 'wtaver' and 'wtsum'."
+            )
+        if not isinstance(self.loss, str) or self.loss not in ("mse", "rmse", "mae"):
+            raise ValueError(
+                f"Unknown loss: {self.loss!r}. Supported losses are 'mse', 'rmse', and 'mae'."
             )
 
-        if feature_names is not None and hasattr(self, "feature_names_in_"):
-            expected = list(self.feature_names_in_)
-            if feature_names != expected:
-                raise ValueError(
-                    f"The feature names should match those that were passed during fit.\n"
-                    f"Feature names seen at fit time: {expected}\n"
-                    f"Feature names seen at predict time: {feature_names}"
-                )
+        pop_size = self._validate_int(self.population_size, "population_size")
+        if pop_size < 2:
+            raise ValueError(f"population_size must be at least 2, got {pop_size}.")
 
+        gens = self._validate_int(self.generations, "generations")
+        if gens < 1:
+            raise ValueError(f"generations must be at least 1, got {gens}.")
+
+        tourn_size = self._validate_int(self.tournament_size, "tournament_size")
+        if tourn_size < 1:
+            raise ValueError(f"tournament_size must be at least 1, got {tourn_size}.")
+
+        elitism = self._validate_int(self.elitism_count, "elitism_count")
+        if not (0 <= elitism < pop_size):
+            raise ValueError(
+                f"elitism_count must satisfy 0 <= elitism_count < population_size ({pop_size}), got {elitism}."
+            )
+
+        crossover = self._validate_float(self.crossover_rate, "crossover_rate")
+        if not (0.0 <= crossover <= 1.0):
+            raise ValueError(f"crossover_rate must be in [0, 1], got {crossover}.")
+
+        mut_rate = self._validate_float(self.mutation_rate, "mutation_rate")
+        if not (0.0 <= mut_rate <= 1.0):
+            raise ValueError(f"mutation_rate must be in [0, 1], got {mut_rate}.")
+
+        mut_sigma = self._validate_float(self.mutation_sigma, "mutation_sigma")
+        if mut_sigma <= 0.0:
+            raise ValueError(f"mutation_sigma must be positive, got {mut_sigma}.")
+
+        if self.mf_bounds is not None:
+            if not isinstance(self.mf_bounds, Mapping):
+                raise TypeError(f"mf_bounds must be a Mapping or None, got {type(self.mf_bounds).__name__}.")
+            for key in self.mf_bounds:
+                if not (isinstance(key, tuple) and len(key) == 2 and all(isinstance(p, str) for p in key)):
+                    raise ValueError(
+                        f"mf_bounds keys must be (variable_name, mf_name) 2-tuples of strings, got {key!r}."
+                    )
+
+        if self.random_state is None:
+            seed = int(np.random.SeedSequence().generate_state(1, dtype=np.uint64)[0])
+        elif isinstance(self.random_state, bool):
+            raise ValueError("random_state must be a nonnegative 64-bit integer, RandomState, Generator, or None.")
+        elif isinstance(self.random_state, np.random.RandomState):
+            seed = int(self.random_state.randint(0, np.iinfo(np.int64).max, dtype=np.int64))
+        elif isinstance(self.random_state, np.random.Generator):
+            seed = int(self.random_state.integers(0, 2**64, dtype=np.uint64))
+        else:
+            seed = index(self.random_state)
+            if not 0 <= seed < 2**64:
+                raise ValueError("random_state must be a nonnegative 64-bit integer or None.")
+
+        return pop_size, gens, crossover, mut_rate, mut_sigma, tourn_size, elitism, seed
+
+    def fit(self, X: Any, y: Any) -> SugenoGARegressor:
+        """Обучить новую Sugeno-модель и вернуть self."""
         spec = self._normalize_spec()
-        input_names = list(spec.inputs.keys())
-        return self.engine_.predict_batch(X_arr, input_names=input_names)
+        X_arr, y_arr, input_names, feature_names = self._validate_fit_data(spec, X, y)
+        (
+            pop_size,
+            gens,
+            crossover,
+            mut_rate,
+            mut_sigma,
+            tourn_size,
+            elitism,
+            seed,
+        ) = self._validate_ga_params()
+        consequents = self._resolve_consequents(spec)
+        init_consequent = float(np.mean(y_arr)) if len(y_arr) else 0.0
+        engine = self._build_engine(
+            spec, dict.fromkeys(consequents, init_consequent), consequents, defuzzer=self.defuzzer
+        )
+        if not hasattr(engine, "fit_ga"):
+            raise RuntimeError(
+                "SugenoGARegressor requires an OpenFLL backend with fit_ga. "
+                "Install a wheel built from a GA-enabled python/pybind revision."
+            )
+        for (variable, term), bounds in (self.mf_bounds or {}).items():
+            engine.set_mf_bounds(variable, term, bounds)
+
+        self.loss_history_ = engine.fit_ga(
+            X_arr, y_arr,
+            input_names=input_names,
+            population_size=pop_size,
+            generations=gens,
+            crossover_rate=crossover,
+            mutation_rate=mut_rate,
+            mutation_sigma=mut_sigma,
+            tournament_size=tourn_size,
+            elitism_count=elitism,
+            loss=self.loss,
+            seed=seed,
+        )
+        self.engine_ = engine
+        self._store_feature_metadata(X_arr.shape[1], feature_names)
+        return self
+
+    def __getstate__(self) -> dict[str, Any]:
+        state = self.__dict__.copy()
+        engine = state.pop("engine_", None)
+        if engine is not None:
+            state["_engine_json"] = engine.save_to_string()
+        return state
+
+    def __setstate__(self, state: dict[str, Any]) -> None:
+        state = state.copy()
+        engine_json = state.pop("_engine_json", None)
+        self.__dict__.update(state)
+        if engine_json is not None:
+            self.engine_ = openfll.load_from_string(engine_json)

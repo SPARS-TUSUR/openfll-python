@@ -61,7 +61,7 @@ def _register_membership_function(
     definitions.setdefault(variable_name, []).append(
         _MembershipFunction(
             name=mf_name,
-            mf_type=mf_type,
+            mf_type=str(mf_type).lower(),
             params=tuple(float(value) for value in params),
         )
     )
@@ -184,8 +184,7 @@ def plot_mf(
 
     Исключения:
         RuntimeError: Библиотека matplotlib не установлена.
-        ValueError: Аргументы некорректны либо движок не был настроен через
-            публичные методы регистрации этого пакета.
+        ValueError: Аргументы некорректны либо метаданные переменных недоступны.
     """
     if variable_type not in {"all", "input", "output"}:
         raise ValueError("variable_type must be 'all', 'input', or 'output'")
@@ -201,10 +200,24 @@ def plot_mf(
 
     roles = _VARIABLE_ROLES.get(engine, {})
     definitions_by_variable = _MEMBERSHIP_FUNCTIONS.get(engine, {})
+    if getattr(engine, "is_built", lambda: False)() and hasattr(engine, "to_dict"):
+        metadata = engine.to_dict().get("extra", {}).get("linear_api", {})
+        if metadata.get("membership_functions"):
+            # GA changes parameters in C++, after Python has registered the initial values.
+            roles = dict.fromkeys(metadata.get("input_order", []), "input")
+            roles.update(dict.fromkeys(metadata.get("output_order", []), "output"))
+            definitions_by_variable = {}
+            for term in metadata["membership_functions"]:
+                definitions_by_variable.setdefault(term["variable"], []).append(
+                    _MembershipFunction(
+                        term["name"],
+                        str(term["type"]).lower(),
+                        tuple(term["parameters"]),
+                    )
+                )
     if not roles:
         raise ValueError(
-            "No variables were registered through openfll.BaseLinearEngine; "
-            "configure the engine before calling plot_mf"
+            "No variable metadata available; configure the engine before calling plot_mf"
         )
 
     if variables is None:
